@@ -1,12 +1,9 @@
-use chrono::Utc;
 use rand::Rng;
-use std::io::{Write, Read, BufRead, BufWriter, BufReader};
+use std::io::{BufWriter, Error, Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::str;
 use std::thread;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
-        
 use crate::configuration::*;
 use crate::message::*;
 
@@ -17,12 +14,15 @@ pub struct Server {
 impl Server {
     pub fn start(&self) {
         println!("Start ...");
-        let listener = TcpListener::bind(self.configuration.address.clone()).expect("failed tcp binding...");
+        let listener =
+            TcpListener::bind(self.configuration.address.clone()).expect("failed tcp binding...");
         for stream in listener.incoming() {
             match stream {
                 Ok(stream) => {
                     println!("New connection: {}", stream.peer_addr().unwrap());
-                    self.handle_client(stream);
+                    if let Err(e) = self.handle_client(stream) {
+                        println!("Server Error: {}", e);
+                    }
                 }
                 Err(e) => {
                     println!("Server Error: {}", e);
@@ -31,19 +31,17 @@ impl Server {
         }
     }
 
-    fn handle_client(&self, mut stream: TcpStream) {
+    fn handle_client(&self, mut stream: TcpStream) -> Result<(), Error> {
         let mut buffer = [0; 4];
         loop {
-            let nbytes = stream.read(&mut buffer).expect("failed");
+            stream.read(&mut buffer).expect("failed");
             let mut array = [0; 4];
-            array.copy_from_slice(&buffer); 
+            array.copy_from_slice(&buffer);
             let nonce = i32::from_be_bytes(array);
             println!("Pong {:?}", nonce);
-            let pong = Pong {
-                nonce: nonce
-            };
-            stream.write(&pong.nonce.to_be_bytes());
-            stream.flush();
+            let pong = Pong { nonce: nonce };
+            stream.write(&pong.nonce.to_be_bytes())?;
+            stream.flush()?;
         }
     }
 }
@@ -66,7 +64,9 @@ impl Client {
 
                         let ping = Ping { nonce: rng.gen() };
                         println!("Ping {}", ping.nonce);
-                        writer.write(&ping.nonce.to_be_bytes());
+                        if let Err(e) = writer.write(&ping.nonce.to_be_bytes()) {
+                            println!("Client Error: {}", e);
+                        }
                     }
                 }
                 Err(e) => {
@@ -74,8 +74,5 @@ impl Client {
                 }
             }
         });
-    }
-    pub fn send(&self, message: Ping) {
-        println!("Send");
     }
 }
