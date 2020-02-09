@@ -1,8 +1,8 @@
 use std::env;
 
 use crate::configuration::*;
-use crate::network::Client;
-use crate::network::Server;
+use crate::network::client::Client;
+use crate::network::server::Server;
 
 mod configuration;
 mod message;
@@ -22,7 +22,7 @@ fn main() {
     let bind_address = &args[1];
     let server = Server {
         configuration: ServerConfiguration {
-            address: bind_address.to_string(),
+            address: bind_address.clone().to_string(),
         },
     };
     server.start();
