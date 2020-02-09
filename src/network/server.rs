@@ -29,14 +29,16 @@ impl Server {
 }
 async fn handle_client(mut stream: TcpStream) -> Result<(), std::io::Error> {
     let mut buffer = [0; 4];
+    let mut i = 0u32;
     loop {
         stream.read(&mut buffer).await?;
         let mut array = [0; 4];
         array.copy_from_slice(&buffer);
         let nonce = u32::from_be_bytes(array);
-        println!("Pong {:?}", nonce);
+        println!("Pong {} {} {:?}", stream.peer_addr()?, i, nonce);
         let pong = Pong { nonce: nonce };
         stream.write(&pong.nonce.to_be_bytes()).await?;
         stream.flush().await?;
+        i += 1;
     }
 }
