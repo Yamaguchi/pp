@@ -9,4 +9,15 @@ edition = "2018"
 chrono = "0.4.10"
 rand = "0.6"
 snow = "0.6.2"
-async-std = "1.5.0"
+prost = "0.6"
+tonic = "0.1.1"
+tokio = { version = "0.2", features = ["full"] }
+futures = { version = "0.3", default-features = false, features = ["alloc"] }
+tower = "0.3"
+hex = "0.4.1"
+lazy_static = "1.4.0"
+log = "0.4.0"
+env_logger = "0.7.1"
+
+[build-dependencies]
+tonic-build  = "0.1.1"

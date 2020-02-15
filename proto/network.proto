@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package network.grpc;
+
+service NetworkService {
+  rpc Initiate(InitiateRequest) returns (stream InitiateResponse);
+}
+
+message Initialized {
+  string public_key = 1;
+}
+
+message Connected {
+  string public_key = 1;
+}
+
+message Authenticated {
+  string public_key = 1;
+  string remote_public_key = 2;
+}
+
+message AlreadyConnected {
+  string public_key = 1;
+}
+
+message Disconnected {
+  string public_key = 1;
+}
+
+message InitiateRequest {
+  string public_key = 1;
+  string host = 2;
+  uint32 port = 3;
+}
+
+message InitiateResponse {
+  oneof event {
+    Initialized initialized = 1;
+    Connected connected = 2;
+    Authenticated authenticated = 3;
+    AlreadyConnected already_connected= 4;
+    Disconnected disconnected= 5;
+  }
+}
+
