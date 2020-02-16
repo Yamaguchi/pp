@@ -25,22 +25,23 @@ extern crate log;
 #[tokio::main]
 async fn main() {
     let args: Vec<String> = env::args().collect();
-    let app = Arc::new(Mutex::new(NetworkApplication::new()));
+    let bind_address = &args[1];
     let rpc_address = &args[2];
+
+    env::set_var("RUST_LOG", "trace");
+    env_logger::init();
+
+    let app = Arc::new(Mutex::new(NetworkApplication::new()));
     let cloned = Arc::clone(&app);
     let rpc = GrpcServer::new(cloned, rpc_address.clone());
     rpc.start().await;
 
-    let bind_address = &args[1];
     let config = ServerConfiguration {
         address: bind_address.clone().to_string(),
     };
     let cloned = Arc::clone(&app);
     let mut server = Server::new(cloned, config);
     server.start().await;
-
-    env::set_var("RUST_LOG", "trace");
-    env_logger::init();
 }
 
 struct NetworkApplication {
