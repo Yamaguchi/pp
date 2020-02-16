@@ -1,24 +1,41 @@
+use crate::application::Application;
 use crate::configuration::ServerConfiguration;
+use crate::errors::Error;
 use crate::grpc::network::initiate_response::Event;
 use crate::grpc::network::{AlreadyConnected, Authenticated, Connected, Disconnected};
-use crate::node::context::NODE;
+use crate::network::connection::Connection;
+
+use std::net::Shutdown;
 use std::net::SocketAddr;
+use std::sync::{Arc, Mutex};
+use tokio::io::BufReader;
+use tokio::io::BufWriter;
 use tokio::net::TcpListener;
 use tokio::net::TcpStream;
+use tokio::stream;
 use tokio::stream::StreamExt;
+
 use tokio::sync::mpsc;
 
 use crate::network::peer::Peer;
 
 use crate::crypto::authenticator::Authenticator;
 
-pub struct Server {
+pub struct Server<A>
+where
+    A: Application + 'static + Send,
+{
+    app: Arc<Mutex<A>>,
     pub configuration: ServerConfiguration,
 }
 
-impl Server {
-    pub fn new(configuration: ServerConfiguration) -> Self {
-        Server {
+impl<A> Server<A>
+where
+    A: Application + 'static + Send,
+{
+    pub fn new(app: Arc<Mutex<A>>, configuration: ServerConfiguration) -> Self {
+        Server::<A> {
+            app: app,
             configuration: configuration,
         }
     }
@@ -28,10 +45,7 @@ impl Server {
 
         while let Some(stream) = incoming.next().await {
             let stream = stream?;
-            // let (sender, receiver) = mpsc::channel(1);
-            // tokio::spawn(async move {
-            let _ = Server::accept(stream).await;
-            // });
+            let _ = self.accept(stream).await;
         }
         Ok(())
     }
@@ -39,54 +53,72 @@ impl Server {
         info!("Start ...");
         let _ = self.accept_loop(self.configuration.address.clone()).await;
     }
-    async fn accept(stream: TcpStream) -> Result<(), std::io::Error> {
-        info!("{:?}", stream.peer_addr()?);
-
+    async fn accept(&self, stream: TcpStream) -> Result<(), Error> {
         let (sender, mut receiver) = mpsc::channel::<Event>(1);
-        let addr: SocketAddr = stream.peer_addr()?;
-        match NODE.write() {
-            Ok(mut n) => {
-                n.accept(addr, &stream, sender.clone()).await;
+        let addr: SocketAddr = stream.peer_addr().map_err(|_| Error::CannotConnectPeer)?;
+        match self.app.lock() {
+            Ok(mut a) => {
+                a.node()?.accept(addr, &stream, sender.clone()).await;
             }
             Err(_) => {}
         }
         while let Some(res) = receiver.recv().await {
+            info!("{:?}", res);
             match res {
-                Event::Connected(Connected { public_key }) => {
-                    info!("Connected {}", public_key);
+                Event::Connected(_) => {
                     break;
                 }
-                Event::Disconnected(Disconnected { public_key }) => {
-                    info!("Disconnected {}", public_key);
-                    return Ok(());
-                }
-                Event::AlreadyConnected(AlreadyConnected { public_key }) => {
-                    info!("AlreadyConnected {}", public_key);
-                    return Ok(());
-                }
-                _ => {}
+                _ => return Ok(()),
             }
         }
 
-        // let cloned = peer.clone();
         let peer = Peer::new(addr);
+
+        let (mut sender, mut receiver) = mpsc::channel::<Result<ServerConnection, _>>(1);
         tokio::spawn(async move {
             let authenticator = Authenticator::new();
-            let e = match authenticator.auth(&peer, &stream, false).await {
-                Ok(_) => Event::Authenticated(Authenticated {
-                    public_key: "".to_string(),
-                    remote_public_key: "".to_string(),
-                }),
-                Err(_) => Event::Disconnected(Disconnected {
-                    public_key: "".to_string(),
-                }),
-            };
-            info!("Authenticated {:?}", e);
-            let _ = Server::handle_client(stream).await;
+            let mut connection = ServerConnection { stream: stream };
+            let e = authenticator.auth(&peer, connection, false).await;
+            sender.send(e).await
         });
+        match receiver.recv().await {
+            Some(Ok(connection)) => {
+                match self.app.lock() {
+                    Ok(mut a) => {
+                        if let Ok(mut n) = a.node() {
+                            n.connections.insert(addr.clone(), connection.stream);
+                        }
+                    }
+                    Err(_) => {}
+                }
+                // let _ = self.handle_client(&connection).await;
+            }
+            Some(Err(Error::ServerAuthenticationFailed(connection))) => {
+                connection.shutdown();
+            }
+            _ => {
+                return Err(Error::AuthenticationFailed);
+            }
+        }
         Ok(())
     }
-    async fn handle_client(_stream: TcpStream) -> Result<(), std::io::Error> {
+    async fn handle_client(&self, connection: &ServerConnection) -> Result<(), std::io::Error> {
+        Ok(())
+    }
+}
+
+pub struct ServerConnection {
+    stream: TcpStream,
+}
+
+impl Connection for ServerConnection {
+    fn write(&self, buf: &[u8]) -> Result<(), Error> {
+        Ok(())
+    }
+    fn read(&self) -> Result<(), Error> {
+        Ok(())
+    }
+    fn shutdown(&self) -> Result<(), Error> {
         Ok(())
     }
 }

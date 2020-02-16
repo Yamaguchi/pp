@@ -1,4 +1,5 @@
 use crate::errors::Error;
+use crate::network::connection::Connection;
 use std::net::SocketAddr;
 use tokio::net::TcpStream;
 
@@ -18,5 +19,17 @@ impl Client {
         } else {
             Err(Error::CannotConnectPeer)
         }
+    }
+}
+
+impl Connection for Client {
+    fn write(&self, buf: &[u8]) -> Result<(), Error> {
+        Ok(())
+    }
+    fn read(&self) -> Result<(), Error> {
+        Ok(())
+    }
+    fn shutdown(&self) -> Result<(), Error> {
+        Ok(())
     }
 }

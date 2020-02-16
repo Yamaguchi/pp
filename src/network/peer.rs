@@ -2,11 +2,12 @@ use crate::crypto::curves::Ed25519;
 use crate::errors::Error;
 use crate::key::PublicKey;
 use crate::message::Message;
+use crate::network::client::Client;
 use std::net::SocketAddr;
 
 #[derive(Clone, Debug)]
 pub struct Peer {
-    pub key: Option<PublicKey<Ed25519>>,
+    pub public_key: Option<PublicKey<Ed25519>>,
     pub addr: SocketAddr,
     pub state: PeerState,
 }
@@ -14,7 +15,7 @@ pub struct Peer {
 impl Peer {
     pub fn new(addr: SocketAddr) -> Self {
         Peer {
-            key: None,
+            public_key: None,
             addr: addr,
             state: PeerState::Init,
         }

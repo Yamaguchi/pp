@@ -1,37 +1,30 @@
 use crate::errors::Error;
 use crate::message::Message;
 use crate::network::peer::Peer;
-
-use std::collections::HashMap;
+use crate::network::peer::PeerState;
 
 use crate::crypto::authenticator::Authenticator;
 use crate::grpc::network::initiate_response::Event;
 use crate::grpc::network::{AlreadyConnected, Authenticated, Connected, Disconnected};
 use crate::network::client::Client;
+use crate::network::connection::Connection;
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use tokio::net::TcpStream;
+use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
 
 // #[derive(Clone)]
 pub struct Node {
     peers: HashMap<SocketAddr, Peer>,
-}
-
-pub mod context {
-    use super::*;
-    use std::sync::RwLock;
-    lazy_static! {
-        pub static ref NODE: RwLock<Node> = {
-            let m = Node::new();
-            RwLock::new(m)
-        };
-    }
+    pub connections: HashMap<SocketAddr, TcpStream>,
 }
 
 impl Node {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Node {
             peers: HashMap::<SocketAddr, Peer>::new(),
+            connections: HashMap::<SocketAddr, TcpStream>::new(),
         }
     }
 
@@ -80,6 +73,7 @@ impl Node {
         }
         debug!("{:?}", self.peers);
 
+        let (mut s, mut r) = mpsc::channel(1);
         let cloned = peer.clone();
         tokio::spawn(async move {
             let mut client = Client::new();
@@ -92,22 +86,26 @@ impl Node {
                 }),
             };
             let _ = sender.send(e).await;
-
             let authenticator = Authenticator::new();
-            let e = match authenticator
-                .auth(&cloned, &client.stream.unwrap(), true)
-                .await
-            {
-                Ok(_) => Event::Authenticated(Authenticated {
-                    public_key: "".to_string(),
-                    remote_public_key: "".to_string(),
-                }),
+            let e = match authenticator.auth(&cloned, client, true).await {
+                Ok(client) => {
+                    let _ = s.send(client).await;
+                    Event::Authenticated(Authenticated {
+                        public_key: "".to_string(),
+                        remote_public_key: "".to_string(),
+                    })
+                }
                 Err(_) => Event::Disconnected(Disconnected {
                     public_key: "".to_string(),
                 }),
             };
             let _ = sender.send(e).await;
         });
+
+        if let Ok(client) = r.try_recv() {
+            self.connections
+                .insert(addr.clone(), client.stream.unwrap());
+        }
     }
 
     pub fn add_peer(&mut self, addr: SocketAddr, peer: Peer) -> Result<(), Error> {
