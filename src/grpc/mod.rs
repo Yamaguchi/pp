@@ -74,17 +74,12 @@ where
 
         let app = Arc::clone(&self.app);
         tokio::spawn(async move {
-            match app.lock() {
-                Ok(a) => {
-                    let addr: SocketAddrV6 = format!("{}:{}", host, port)
-                        .parse()
-                        .expect("cannot parse address");
-                    if let Ok(mut n) = a.node() {
-                        n.connect(SocketAddr::V6(addr), sender);
-                    }
-                }
-                Err(_) => {}
-            };
+            let addr: SocketAddrV6 = format!("{}:{}", host, port)
+                .parse()
+                .expect("cannot parse address");
+            if let Ok(mut n) = app.lock().unwrap().node() {
+                n.connect(SocketAddr::V6(addr), sender);
+            }
             while let Some(res) = receiver.recv().await {
                 let response = InitiateResponse {
                     event: Some(res.clone()),

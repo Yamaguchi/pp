@@ -56,12 +56,8 @@ where
     async fn accept(&self, stream: TcpStream) -> Result<(), Error> {
         let (sender, mut receiver) = mpsc::channel::<Event>(1);
         let addr: SocketAddr = stream.peer_addr().map_err(|_| Error::CannotConnectPeer)?;
-        match self.app.lock() {
-            Ok(mut a) => {
-                a.node()?.accept(addr, &stream, sender.clone()).await;
-            }
-            Err(_) => {}
-        }
+        let app = self.app.lock().map_err(|x| Error::CannotGetLock)?;
+        app.node()?.accept(addr, &stream, sender.clone()).await;
         while let Some(res) = receiver.recv().await {
             info!("{:?}", res);
             match res {
@@ -83,14 +79,10 @@ where
         });
         match receiver.recv().await {
             Some(Ok(connection)) => {
-                match self.app.lock() {
-                    Ok(mut a) => {
-                        if let Ok(mut n) = a.node() {
-                            n.connections.insert(addr.clone(), connection.stream);
-                        }
-                    }
-                    Err(_) => {}
-                }
+                let app = self.app.lock().map_err(|x| Error::CannotGetLock)?;
+                app.node()?
+                    .connections
+                    .insert(addr.clone(), connection.stream);
                 // let _ = self.handle_client(&connection).await;
             }
             Some(Err(Error::ServerAuthenticationFailed(connection))) => {
