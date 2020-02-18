@@ -76,16 +76,22 @@ impl Node {
         let (mut s, mut r) = mpsc::channel(1);
         let cloned = peer.clone();
         tokio::spawn(async move {
-            let mut client = Client::new();
-            let e = match client.connect(addr.clone()).await {
-                Ok(_) => Event::Connected(Connected {
-                    public_key: "".to_string(),
-                }),
-                Err(_) => Event::Disconnected(Disconnected {
-                    public_key: "".to_string(),
-                }),
+            let client = match Client::connect(addr.clone()).await {
+                Ok(client) => {
+                    let e = Event::Connected(Connected {
+                        public_key: "".to_string(),
+                    });
+                    let _ = sender.send(e).await;
+                    client
+                }
+                Err(_) => {
+                    let e = Event::Disconnected(Disconnected {
+                        public_key: "".to_string(),
+                    });
+                    let _ = sender.send(e).await;
+                    return;
+                }
             };
-            let _ = sender.send(e).await;
             let authenticator = Authenticator::new();
             let e = match authenticator.auth(&cloned, client, true).await {
                 Ok(client) => {
@@ -103,8 +109,7 @@ impl Node {
         });
 
         if let Ok(client) = r.try_recv() {
-            self.connections
-                .insert(addr.clone(), client.stream.unwrap());
+            self.connections.insert(addr.clone(), client.stream);
         }
     }
 

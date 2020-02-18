@@ -7,7 +7,7 @@ use crate::network::connection::Connection;
 
 use std::net::Shutdown;
 use std::net::SocketAddr;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use tokio::io::BufReader;
 use tokio::io::BufWriter;
 use tokio::net::TcpListener;
@@ -23,17 +23,17 @@ use crate::crypto::authenticator::Authenticator;
 
 pub struct Server<A>
 where
-    A: Application + 'static + Send,
+    A: Application + 'static + Send + Sync,
 {
-    app: Arc<Mutex<A>>,
+    app: Arc<RwLock<A>>,
     pub configuration: ServerConfiguration,
 }
 
 impl<A> Server<A>
 where
-    A: Application + 'static + Send,
+    A: Application + 'static + Send + Sync,
 {
-    pub fn new(app: Arc<Mutex<A>>, configuration: ServerConfiguration) -> Self {
+    pub fn new(app: Arc<RwLock<A>>, configuration: ServerConfiguration) -> Self {
         Server::<A> {
             app: app,
             configuration: configuration,
@@ -56,7 +56,7 @@ where
     async fn accept(&self, stream: TcpStream) -> Result<(), Error> {
         let (sender, mut receiver) = mpsc::channel::<Event>(1);
         let addr: SocketAddr = stream.peer_addr().map_err(|_| Error::CannotConnectPeer)?;
-        let app = self.app.lock().map_err(|x| Error::CannotGetLock)?;
+        let app = self.app.read().map_err(|x| Error::CannotGetLock)?;
         app.node()?.accept(addr, &stream, sender.clone()).await;
         while let Some(res) = receiver.recv().await {
             info!("{:?}", res);
@@ -79,7 +79,7 @@ where
         });
         match receiver.recv().await {
             Some(Ok(connection)) => {
-                let app = self.app.lock().map_err(|x| Error::CannotGetLock)?;
+                let app = self.app.read().map_err(|_| Error::CannotGetLock)?;
                 app.node()?
                     .connections
                     .insert(addr.clone(), connection.stream);

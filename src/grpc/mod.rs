@@ -5,23 +5,25 @@ use network::{AlreadyConnected, Authenticated, Connected, Disconnected};
 use network::{InitiateRequest, InitiateResponse};
 use std::net::SocketAddr;
 use std::net::SocketAddrV6;
-use std::sync::{Arc, Mutex};
+use std::ops::Deref;
+use std::ops::DerefMut;
+use std::sync::{Arc, Mutex, RwLock};
 use tokio::sync::mpsc;
 use tonic::{transport::Server, Request, Response, Status};
 
 pub struct GrpcServer<A>
 where
-    A: Application + 'static + Send,
+    A: Application + 'static + Send + Sync,
 {
-    app: Arc<Mutex<A>>,
+    app: Arc<RwLock<A>>,
     address: String,
 }
 
 impl<A> GrpcServer<A>
 where
-    A: Application + 'static + Send,
+    A: Application + 'static + Send + Sync,
 {
-    pub fn new(app: Arc<Mutex<A>>, address: String) -> Self {
+    pub fn new(app: Arc<RwLock<A>>, address: String) -> Self {
         GrpcServer::<A> {
             app: app,
             address: address,
@@ -49,17 +51,17 @@ pub mod network {
 #[derive(Clone)]
 struct NetworkServiceImpl<A>
 where
-    A: Application + 'static + Send,
+    A: Application + 'static + Send + Sync,
 {
-    app: Arc<Mutex<A>>,
+    app: Arc<RwLock<A>>,
 }
 
-impl<A> NetworkServiceImpl<A> where A: Application + 'static + Send {}
+impl<A> NetworkServiceImpl<A> where A: Application + 'static + Send + Sync {}
 
 #[tonic::async_trait]
 impl<A> NetworkService for NetworkServiceImpl<A>
 where
-    A: Application + 'static + Send,
+    A: Application + 'static + Send + Sync,
 {
     type InitiateStream = mpsc::Receiver<Result<InitiateResponse, Status>>;
     async fn initiate(
@@ -72,14 +74,25 @@ where
         let port = request.get_ref().port;
         let (sender, mut receiver) = mpsc::channel(1);
 
-        let app = Arc::clone(&self.app);
+        let cloned = Arc::clone(&self.app);
         tokio::spawn(async move {
-            let addr: SocketAddrV6 = format!("{}:{}", host, port)
-                .parse()
-                .expect("cannot parse address");
-            if let Ok(mut n) = app.lock().unwrap().node() {
-                n.connect(SocketAddr::V6(addr), sender);
+            {
+                let mut guard = cloned.read().unwrap();
+                let app = guard.deref();
+                // let app = guard;
+                let addr: SocketAddrV6 = format!("{}:{}", host, port)
+                    .parse()
+                    .expect("cannot parse address");
+                // let mut n = ;
+                app.node()
+                    .ok()
+                    .unwrap()
+                    .deref_mut()
+                    .connect(SocketAddr::V6(addr), sender);
             }
+            // if let Ok(mut n) = app.node() {
+            //     n.connect(SocketAddr::V6(addr), sender);
+            // }
             while let Some(res) = receiver.recv().await {
                 let response = InitiateResponse {
                     event: Some(res.clone()),

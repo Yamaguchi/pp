@@ -4,18 +4,13 @@ use std::net::SocketAddr;
 use tokio::net::TcpStream;
 
 pub struct Client {
-    pub stream: Option<TcpStream>,
+    pub stream: TcpStream,
 }
 
 impl Client {
-    pub fn new() -> Self {
-        Client { stream: None }
-    }
-
-    pub async fn connect(&mut self, addr: SocketAddr) -> Result<(), Error> {
+    pub async fn connect(addr: SocketAddr) -> Result<Self, Error> {
         if let Ok(stream) = TcpStream::connect(addr).await {
-            self.stream = Some(stream);
-            Ok(())
+            Ok(Client { stream: stream })
         } else {
             Err(Error::CannotConnectPeer)
         }
