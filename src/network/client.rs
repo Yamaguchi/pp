@@ -5,8 +5,12 @@ use crate::key::PrivateKey;
 use crate::network::connection::Connection;
 use crate::node::Connections;
 use async_trait::async_trait;
+use bytes::BytesMut;
 use snow::TransportState;
 use std::net::SocketAddr;
+use std::sync::{Arc, RwLock};
+use tokio::io::AsyncReadExt;
+use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
 
 pub struct Client {
@@ -27,7 +31,7 @@ impl Client {
             .map_err(|_| Error::CannotConnectPeer)?;
         let authenticator = Authenticator::new(key);
         let mut client = Client::new(stream);
-        let transport = authenticator.auth(&client, true).await?;
+        let transport = authenticator.auth(&mut client, true).await?;
         client.transport = Some(transport);
         Ok(client)
     }
@@ -35,13 +39,15 @@ impl Client {
 
 #[async_trait]
 impl Connection for Client {
-    async fn write(&self, buf: &[u8]) -> Result<(), Error> {
+    async fn write(&mut self, buf: &[u8]) -> Result<(), Error> {
+        let _ = self.stream.write(buf).await;
         Ok(())
     }
-    async fn read(&self, mut buf: &[u8]) -> Result<usize, Error> {
+    async fn read(&mut self, mut buf: BytesMut) -> Result<usize, Error> {
+        self.stream.read_buf(&mut buf).await;
         Ok(1)
     }
-    async fn shutdown(&self) -> Result<(), Error> {
+    async fn shutdown(&mut self) -> Result<(), Error> {
         Ok(())
     }
 }

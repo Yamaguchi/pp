@@ -22,7 +22,7 @@ use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
 pub enum Connections {
     Incomeing(TcpStream),
-    Outgoing(TcpStream),
+    Outgoing(Client),
 }
 // #[derive(Clone)]
 pub struct Node {

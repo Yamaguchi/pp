@@ -7,9 +7,12 @@ use crate::network::connection::Connection;
 use crate::node::Connections;
 use crate::node::*;
 use async_trait::async_trait;
+use bytes::BytesMut;
 use std::net::Shutdown;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, RwLock};
+use tokio::io::AsyncReadExt;
+use tokio::io::AsyncWriteExt;
 use tokio::io::BufReader;
 use tokio::io::BufWriter;
 use tokio::net::TcpListener;
@@ -75,13 +78,15 @@ pub struct ServerConnection {
 
 #[async_trait]
 impl Connection for ServerConnection {
-    async fn write(&self, buf: &[u8]) -> Result<(), Error> {
+    async fn write(&mut self, buf: &[u8]) -> Result<(), Error> {
+        let _ = self.stream.write(buf).await;
         Ok(())
     }
-    async fn read(&self, mut buf: &[u8]) -> Result<usize, Error> {
+    async fn read(&mut self, mut buf: BytesMut) -> Result<usize, Error> {
+        self.stream.read_buf(&mut buf).await;
         Ok(1)
     }
-    async fn shutdown(&self) -> Result<(), Error> {
+    async fn shutdown(&mut self) -> Result<(), Error> {
         Ok(())
     }
 }

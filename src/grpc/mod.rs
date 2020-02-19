@@ -140,11 +140,7 @@ async fn create_initiate_response<A>(
             return;
         }
     };
-    match add_connection(
-        Arc::clone(&app),
-        peer.addr,
-        Connections::Outgoing(client.stream),
-    ) {
+    match add_connection(Arc::clone(&app), peer.addr, Connections::Outgoing(client)) {
         Ok(_) => {
             response(tx.clone(), connected()).await;
         }
