@@ -6,7 +6,7 @@ use crate::grpc::network::{AlreadyConnected, Authenticated, Connected, Disconnec
 use crate::network::connection::Connection;
 use crate::node::Connections;
 use crate::node::*;
-
+use async_trait::async_trait;
 use std::net::Shutdown;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, RwLock};
@@ -73,14 +73,15 @@ pub struct ServerConnection {
     stream: TcpStream,
 }
 
+#[async_trait]
 impl Connection for ServerConnection {
-    fn write(&self, buf: &[u8]) -> Result<(), Error> {
+    async fn write(&self, buf: &[u8]) -> Result<(), Error> {
         Ok(())
     }
-    fn read(&self) -> Result<(), Error> {
-        Ok(())
+    async fn read(&self, mut buf: &[u8]) -> Result<usize, Error> {
+        Ok(1)
     }
-    fn shutdown(&self) -> Result<(), Error> {
+    async fn shutdown(&self) -> Result<(), Error> {
         Ok(())
     }
 }

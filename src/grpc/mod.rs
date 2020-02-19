@@ -4,6 +4,7 @@ use crate::network::client::Client;
 use crate::network::peer::Peer;
 use crate::node::Connections;
 use crate::node::{add_connection, add_peer};
+
 use network::initiate_response::Event;
 use network::network_service_server::{NetworkService, NetworkServiceServer};
 use network::{AlreadyConnected, Connected, Disconnected};
@@ -127,7 +128,12 @@ async fn create_initiate_response<A>(
             return;
         }
     };
-    let client = match Client::connect(peer.addr).await {
+    let key = {
+        let guard_app = app.read().unwrap();
+        let app = guard_app.deref();
+        app.private_key()
+    };
+    let client = match Client::connect(peer.addr, key).await {
         Ok(client) => client,
         Err(_) => {
             response(tx.clone(), disconnected()).await;

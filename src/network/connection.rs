@@ -1,9 +1,11 @@
 use crate::errors::Error;
 use crate::node::Connections;
+use async_trait::async_trait;
 use std::marker::Sized;
 
+#[async_trait]
 pub trait Connection: Sized {
-    fn write(&self, buf: &[u8]) -> Result<(), Error>;
-    fn read(&self) -> Result<(), Error>;
-    fn shutdown(&self) -> Result<(), Error>;
+    async fn write(&self, buf: &[u8]) -> Result<(), Error>;
+    async fn read(&self, mut buf: &[u8]) -> Result<usize, Error>;
+    async fn shutdown(&self) -> Result<(), Error>;
 }
