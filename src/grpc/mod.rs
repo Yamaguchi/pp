@@ -1,7 +1,6 @@
 use crate::application::Application;
 use crate::errors::Error;
 use crate::network::client::Client;
-use crate::network::peer::Peer;
 use crate::node::Connections;
 use crate::node::{add_connection, add_peer};
 
@@ -10,9 +9,7 @@ use network::network_service_server::{NetworkService, NetworkServiceServer};
 use network::{AlreadyConnected, Connected, Disconnected};
 use network::{InitiateRequest, InitiateResponse};
 use std::net::SocketAddr;
-use std::net::SocketAddrV6;
 use std::ops::Deref;
-use std::ops::DerefMut;
 use std::sync::{Arc, RwLock};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;

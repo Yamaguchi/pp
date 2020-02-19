@@ -1,25 +1,14 @@
 use crate::application::Application;
 use crate::errors::Error;
 use crate::message::Message;
-use crate::network::peer::Peer;
-use crate::network::peer::PeerState;
-
-use crate::crypto::authenticator::Authenticator;
-use crate::grpc::network::initiate_response::Event;
-use crate::grpc::network::{AlreadyConnected, Authenticated, Connected, Disconnected};
 use crate::network::client::Client;
-use crate::network::connection::Connection;
-use crate::network::server::ServerConnection;
+use crate::network::peer::Peer;
 use std::collections::HashMap;
-use std::marker::Sized;
 use std::net::SocketAddr;
-use std::net::SocketAddrV6;
 use std::ops::Deref;
 use std::ops::DerefMut;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, RwLock};
 use tokio::net::TcpStream;
-use tokio::sync::mpsc;
-use tokio::sync::mpsc::Sender;
 pub enum Connections {
     Incomeing(TcpStream),
     Outgoing(Client),

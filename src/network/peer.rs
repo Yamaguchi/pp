@@ -2,7 +2,6 @@ use crate::crypto::curves::Ed25519;
 use crate::errors::Error;
 use crate::key::PublicKey;
 use crate::message::Message;
-use crate::network::client::Client;
 use std::net::SocketAddr;
 
 #[derive(Clone, Debug)]
@@ -29,7 +28,4 @@ impl Peer {
 #[derive(Clone, Debug)]
 pub enum PeerState {
     Init,
-    Connecting,
-    Connected,
-    Authenticated,
 }

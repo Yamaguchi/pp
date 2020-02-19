@@ -3,12 +3,9 @@ use crate::crypto::curves::Ed25519;
 use crate::errors::Error;
 use crate::key::PrivateKey;
 use crate::network::connection::Connection;
-use crate::node::Connections;
 use async_trait::async_trait;
-use bytes::BytesMut;
 use snow::TransportState;
 use std::net::SocketAddr;
-use std::sync::{Arc, RwLock};
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
@@ -43,9 +40,14 @@ impl Connection for Client {
         let _ = self.stream.write(buf).await;
         Ok(())
     }
-    async fn read(&mut self, mut buf: BytesMut) -> Result<usize, Error> {
-        self.stream.read_buf(&mut buf).await;
-        Ok(1)
+    async fn read(&mut self) -> Result<Vec<u8>, Error> {
+        let mut buf = [0u8; 65535];
+        let n = self
+            .stream
+            .read(&mut buf)
+            .await
+            .map_err(|_| Error::CannotRead)?;
+        Ok(Vec::from(&buf[..n]))
     }
     async fn shutdown(&mut self) -> Result<(), Error> {
         Ok(())

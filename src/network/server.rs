@@ -1,23 +1,16 @@
 use crate::application::Application;
 use crate::configuration::ServerConfiguration;
 use crate::errors::Error;
-use crate::grpc::network::initiate_response::Event;
-use crate::grpc::network::{AlreadyConnected, Authenticated, Connected, Disconnected};
 use crate::network::connection::Connection;
 use crate::node::Connections;
 use crate::node::*;
 use async_trait::async_trait;
-use bytes::BytesMut;
-use std::net::Shutdown;
 use std::net::SocketAddr;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, RwLock};
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
-use tokio::io::BufReader;
-use tokio::io::BufWriter;
 use tokio::net::TcpListener;
 use tokio::net::TcpStream;
-use tokio::stream;
 use tokio::stream::StreamExt;
 
 use tokio::sync::mpsc;
@@ -82,9 +75,14 @@ impl Connection for ServerConnection {
         let _ = self.stream.write(buf).await;
         Ok(())
     }
-    async fn read(&mut self, mut buf: BytesMut) -> Result<usize, Error> {
-        self.stream.read_buf(&mut buf).await;
-        Ok(1)
+    async fn read(&mut self) -> Result<Vec<u8>, Error> {
+        let mut buf = [0u8; 65535];
+        let n = self
+            .stream
+            .read(&mut buf)
+            .await
+            .map_err(|_| Error::CannotRead)?;
+        Ok(Vec::from(&buf[..n]))
     }
     async fn shutdown(&mut self) -> Result<(), Error> {
         Ok(())

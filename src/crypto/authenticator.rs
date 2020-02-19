@@ -2,7 +2,6 @@ use crate::crypto::curves::Ed25519;
 use crate::errors::Error;
 use crate::key::PrivateKey;
 use crate::network::connection::Connection;
-use bytes::BytesMut;
 use snow::params::NoiseParams;
 use snow::HandshakeState;
 use snow::TransportState;
@@ -88,10 +87,9 @@ impl Authenticator {
     {
         while !handshake.is_handshake_finished() {
             let mut buf = [0u8; 65535];
-            let mut incoming = BytesMut::with_capacity(65535);
-            connection.read(incoming).await?;
+            let incoming = connection.read().await?;
             handshake
-                .read_message(&incoming, &mut buf)
+                .read_message(&incoming[..], &mut buf)
                 .map_err(|_| Error::AuthenticationFailed)?;
             handshake
                 .write_message(&[], &mut buf)
