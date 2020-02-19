@@ -1,3 +1,4 @@
+use crate::application::Application;
 use crate::errors::Error;
 use crate::message::Message;
 use crate::network::peer::Peer;
@@ -8,118 +9,51 @@ use crate::grpc::network::initiate_response::Event;
 use crate::grpc::network::{AlreadyConnected, Authenticated, Connected, Disconnected};
 use crate::network::client::Client;
 use crate::network::connection::Connection;
+use crate::network::server::ServerConnection;
 use std::collections::HashMap;
+use std::marker::Sized;
 use std::net::SocketAddr;
+use std::net::SocketAddrV6;
+use std::ops::Deref;
+use std::ops::DerefMut;
+use std::sync::{Arc, Mutex, RwLock};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
-
+pub enum Connections {
+    Incomeing(TcpStream),
+    Outgoing(TcpStream),
+}
 // #[derive(Clone)]
 pub struct Node {
     peers: HashMap<SocketAddr, Peer>,
-    pub connections: HashMap<SocketAddr, TcpStream>,
+    connections: HashMap<SocketAddr, Connections>,
 }
 
 impl Node {
     pub fn new() -> Self {
         Node {
             peers: HashMap::<SocketAddr, Peer>::new(),
-            connections: HashMap::<SocketAddr, TcpStream>::new(),
+            connections: HashMap::<SocketAddr, Connections>::new(),
         }
     }
 
-    pub async fn accept(
+    pub fn add_connection(
         &mut self,
         addr: SocketAddr,
-        stream: &TcpStream,
-        mut sender: Sender<Event>,
-    ) {
-        let peer = Peer::new(addr);
-        match self.add_peer(addr.clone(), peer.clone()) {
-            Ok(_) => {
-                let e = Event::Connected(Connected {
-                    public_key: "".to_string(),
-                });
-                tokio::spawn(async move {
-                    let _ = sender.send(e).await;
-                });
-            }
-            Err(Error::PeerAlreadyConnected) => {
-                let e = Event::AlreadyConnected(AlreadyConnected {
-                    public_key: "".to_string(),
-                });
-                tokio::spawn(async move {
-                    let _ = sender.send(e).await;
-                });
-                return;
-            }
-            _ => {}
-        }
+        connection: Connections,
+    ) -> Result<(), Error> {
+        self.connections.insert(addr, connection);
+        Ok(())
     }
 
-    pub fn connect(&mut self, addr: SocketAddr, mut sender: Sender<Event>) {
+    pub fn add_peer(&mut self, addr: SocketAddr) -> Result<Peer, Error> {
         let peer = Peer::new(addr);
-        match self.add_peer(addr.clone(), peer.clone()) {
-            Err(Error::PeerAlreadyConnected) => {
-                let e = Event::AlreadyConnected(AlreadyConnected {
-                    public_key: "".to_string(),
-                });
-                tokio::spawn(async move {
-                    let _ = sender.send(e).await;
-                });
-                return;
-            }
-            _ => {}
-        }
-        debug!("{:?}", self.peers);
-
-        let (mut s, mut r) = mpsc::channel(1);
-        let cloned = peer.clone();
-        tokio::spawn(async move {
-            let client = match Client::connect(addr.clone()).await {
-                Ok(client) => {
-                    let e = Event::Connected(Connected {
-                        public_key: "".to_string(),
-                    });
-                    let _ = sender.send(e).await;
-                    client
-                }
-                Err(_) => {
-                    let e = Event::Disconnected(Disconnected {
-                        public_key: "".to_string(),
-                    });
-                    let _ = sender.send(e).await;
-                    return;
-                }
-            };
-            let authenticator = Authenticator::new();
-            let e = match authenticator.auth(&cloned, client, true).await {
-                Ok(client) => {
-                    let _ = s.send(client).await;
-                    Event::Authenticated(Authenticated {
-                        public_key: "".to_string(),
-                        remote_public_key: "".to_string(),
-                    })
-                }
-                Err(_) => Event::Disconnected(Disconnected {
-                    public_key: "".to_string(),
-                }),
-            };
-            let _ = sender.send(e).await;
-        });
-
-        if let Ok(client) = r.try_recv() {
-            self.connections.insert(addr.clone(), client.stream);
-        }
-    }
-
-    pub fn add_peer(&mut self, addr: SocketAddr, peer: Peer) -> Result<(), Error> {
-        let addr = addr.clone();
         if self.peers.contains_key(&addr) {
             return Err(Error::PeerAlreadyConnected);
         }
         self.peers.insert(addr, peer.clone());
-        Ok(())
+        Ok(peer)
     }
 
     pub fn update_peer(&mut self, peer: Peer) -> Result<(), Error> {
@@ -156,4 +90,30 @@ impl Node {
     //     });
     //     Ok(())
     // }
+}
+
+pub fn add_peer<A>(app: Arc<RwLock<A>>, addr: SocketAddr) -> Result<Peer, Error>
+where
+    A: Application + 'static + Send + Sync,
+{
+    let guard_app = app.read().unwrap();
+    let app = guard_app.deref();
+    let mut guard_node = app.node().ok().unwrap();
+    let node = guard_node.deref_mut();
+    node.add_peer(addr)
+}
+
+pub fn add_connection<A>(
+    app: Arc<RwLock<A>>,
+    addr: SocketAddr,
+    conn: Connections,
+) -> Result<(), Error>
+where
+    A: Application + 'static + Send + Sync,
+{
+    let guard_app = app.read().unwrap();
+    let app = guard_app.deref();
+    let mut guard_node = app.node().ok().unwrap();
+    let node = guard_node.deref_mut();
+    node.add_connection(addr, conn)
 }

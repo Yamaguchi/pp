@@ -1,5 +1,6 @@
 use crate::errors::Error;
 use crate::network::connection::Connection;
+use crate::node::Connections;
 use std::net::SocketAddr;
 use tokio::net::TcpStream;
 
@@ -9,11 +10,11 @@ pub struct Client {
 
 impl Client {
     pub async fn connect(addr: SocketAddr) -> Result<Self, Error> {
-        if let Ok(stream) = TcpStream::connect(addr).await {
-            Ok(Client { stream: stream })
-        } else {
-            Err(Error::CannotConnectPeer)
-        }
+        let stream = TcpStream::connect(addr)
+            .await
+            .map_err(|_| Error::CannotConnectPeer)?;
+
+        Ok(Client { stream: stream })
     }
 }
 

@@ -1,4 +1,5 @@
 use crate::errors::Error;
+use crate::node::Connections;
 use std::marker::Sized;
 
 pub trait Connection: Sized {

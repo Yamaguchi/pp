@@ -1,14 +1,20 @@
 use crate::application::Application;
+use crate::errors::Error;
+use crate::network::client::Client;
+use crate::network::peer::Peer;
+use crate::node::Connections;
+use crate::node::{add_connection, add_peer};
 use network::initiate_response::Event;
 use network::network_service_server::{NetworkService, NetworkServiceServer};
-use network::{AlreadyConnected, Authenticated, Connected, Disconnected};
+use network::{AlreadyConnected, Connected, Disconnected};
 use network::{InitiateRequest, InitiateResponse};
 use std::net::SocketAddr;
 use std::net::SocketAddrV6;
 use std::ops::Deref;
 use std::ops::DerefMut;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, RwLock};
 use tokio::sync::mpsc;
+use tokio::sync::mpsc::Sender;
 use tonic::{transport::Server, Request, Response, Status};
 
 pub struct GrpcServer<A>
@@ -68,59 +74,76 @@ where
         &self,
         request: Request<InitiateRequest>,
     ) -> Result<Response<Self::InitiateStream>, Status> {
-        let (mut tx, rx) = mpsc::channel(1);
+        let (tx, rx) = mpsc::channel(1);
 
         let host = request.get_ref().host.clone();
         let port = request.get_ref().port;
-        let (sender, mut receiver) = mpsc::channel(1);
+        let addr: SocketAddr = format!("{}:{}", host, port)
+            .parse()
+            .expect("cannot parse address");
 
         let cloned = Arc::clone(&self.app);
         tokio::spawn(async move {
-            {
-                let mut guard = cloned.read().unwrap();
-                let app = guard.deref();
-                // let app = guard;
-                let addr: SocketAddrV6 = format!("{}:{}", host, port)
-                    .parse()
-                    .expect("cannot parse address");
-                // let mut n = ;
-                app.node()
-                    .ok()
-                    .unwrap()
-                    .deref_mut()
-                    .connect(SocketAddr::V6(addr), sender);
-            }
-            // if let Ok(mut n) = app.node() {
-            //     n.connect(SocketAddr::V6(addr), sender);
-            // }
-            while let Some(res) = receiver.recv().await {
-                let response = InitiateResponse {
-                    event: Some(res.clone()),
-                };
-                let _ = tx.send(Ok(response)).await;
-                match res {
-                    Event::Connected(Connected { public_key }) => {
-                        info!("Connected {}", public_key);
-                    }
-                    Event::Disconnected(Disconnected { public_key }) => {
-                        info!("Disconnected {}", public_key);
-                        break;
-                    }
-                    Event::AlreadyConnected(AlreadyConnected { public_key }) => {
-                        info!("AlreadyConnected {}", public_key);
-                        break;
-                    }
-                    Event::Authenticated(Authenticated {
-                        public_key,
-                        remote_public_key,
-                    }) => {
-                        info!("Authenticated {}, {}", public_key, remote_public_key);
-                        break;
-                    }
-                    _ => {}
-                }
-            }
+            create_initiate_response(cloned, tx, addr).await;
         });
         Ok(Response::<Self::InitiateStream>::new(rx))
+    }
+}
+
+fn already_connected() -> Event {
+    Event::AlreadyConnected(AlreadyConnected {
+        public_key: "".to_string(),
+    })
+}
+fn disconnected() -> Event {
+    Event::Disconnected(Disconnected {
+        public_key: "".to_string(),
+    })
+}
+fn connected() -> Event {
+    Event::Connected(Connected {
+        public_key: "".to_string(),
+    })
+}
+
+async fn response(mut tx: Sender<Result<InitiateResponse, Status>>, e: Event) {
+    let _ = tx.send(Ok(InitiateResponse { event: Some(e) })).await;
+}
+
+async fn create_initiate_response<A>(
+    app: Arc<RwLock<A>>,
+    tx: Sender<Result<InitiateResponse, Status>>,
+    addr: SocketAddr,
+) where
+    A: Application + 'static + Send + Sync,
+{
+    let peer = match add_peer(Arc::clone(&app), addr) {
+        Ok(peer) => peer,
+        Err(Error::PeerAlreadyConnected) => {
+            response(tx.clone(), already_connected()).await;
+            return;
+        }
+        _ => {
+            return;
+        }
+    };
+    let client = match Client::connect(peer.addr).await {
+        Ok(client) => client,
+        Err(_) => {
+            response(tx.clone(), disconnected()).await;
+            return;
+        }
+    };
+    match add_connection(
+        Arc::clone(&app),
+        peer.addr,
+        Connections::Outgoing(client.stream),
+    ) {
+        Ok(_) => {
+            response(tx.clone(), connected()).await;
+        }
+        Err(_) => {
+            response(tx.clone(), disconnected()).await;
+        }
     }
 }

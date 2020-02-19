@@ -4,6 +4,8 @@ use crate::errors::Error;
 use crate::grpc::network::initiate_response::Event;
 use crate::grpc::network::{AlreadyConnected, Authenticated, Connected, Disconnected};
 use crate::network::connection::Connection;
+use crate::node::Connections;
+use crate::node::*;
 
 use std::net::Shutdown;
 use std::net::SocketAddr;
@@ -45,7 +47,7 @@ where
 
         while let Some(stream) = incoming.next().await {
             let stream = stream?;
-            let _ = self.accept(stream).await;
+            let _ = self.accept(Arc::clone(&self.app), stream).await;
         }
         Ok(())
     }
@@ -53,46 +55,14 @@ where
         info!("Start ...");
         let _ = self.accept_loop(self.configuration.address.clone()).await;
     }
-    async fn accept(&self, stream: TcpStream) -> Result<(), Error> {
-        let (sender, mut receiver) = mpsc::channel::<Event>(1);
+    async fn accept(&self, app: Arc<RwLock<A>>, stream: TcpStream) -> Result<(), Error>
+    where
+        A: Application + 'static + Send + Sync,
+    {
         let addr: SocketAddr = stream.peer_addr().map_err(|_| Error::CannotConnectPeer)?;
-        let app = self.app.read().map_err(|x| Error::CannotGetLock)?;
-        app.node()?.accept(addr, &stream, sender.clone()).await;
-        while let Some(res) = receiver.recv().await {
-            info!("{:?}", res);
-            match res {
-                Event::Connected(_) => {
-                    break;
-                }
-                _ => return Ok(()),
-            }
-        }
-
-        let peer = Peer::new(addr);
-
-        let (mut sender, mut receiver) = mpsc::channel::<Result<ServerConnection, _>>(1);
-        tokio::spawn(async move {
-            let authenticator = Authenticator::new();
-            let mut connection = ServerConnection { stream: stream };
-            let e = authenticator.auth(&peer, connection, false).await;
-            sender.send(e).await
-        });
-        match receiver.recv().await {
-            Some(Ok(connection)) => {
-                let app = self.app.read().map_err(|_| Error::CannotGetLock)?;
-                app.node()?
-                    .connections
-                    .insert(addr.clone(), connection.stream);
-                // let _ = self.handle_client(&connection).await;
-            }
-            Some(Err(Error::ServerAuthenticationFailed(connection))) => {
-                connection.shutdown();
-            }
-            _ => {
-                return Err(Error::AuthenticationFailed);
-            }
-        }
-        Ok(())
+        let peer = add_peer(Arc::clone(&app), addr)?;
+        let server = Connections::Incomeing(stream);
+        add_connection(Arc::clone(&app), peer.addr, server)
     }
     async fn handle_client(&self, connection: &ServerConnection) -> Result<(), std::io::Error> {
         Ok(())
