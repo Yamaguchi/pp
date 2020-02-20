@@ -4,7 +4,6 @@ use crate::application::NetworkApplication;
 use crate::configuration::*;
 use crate::grpc::GrpcServer;
 use crate::network::server::Server;
-use crate::node::Node;
 use std::sync::Arc;
 use std::sync::RwLock;
 

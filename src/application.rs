@@ -25,7 +25,7 @@ impl Application for NetworkApplication {
 
 impl NetworkApplication {
     pub fn new() -> Self {
-        let random_bytes: Vec<u8> = (0..256).map(|_| rand::random::<u8>()).collect();
+        let random_bytes: Vec<u8> = (0..32).map(|_| rand::random::<u8>()).collect();
         NetworkApplication {
             node: Arc::new(Mutex::new(Node::new())),
             private_key: PrivateKey::<Ed25519>::new(&random_bytes),

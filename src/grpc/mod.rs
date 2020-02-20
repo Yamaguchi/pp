@@ -105,7 +105,8 @@ fn connected() -> Event {
 }
 
 async fn response(mut tx: Sender<Result<InitiateResponse, Status>>, e: Event) {
-    let _ = tx.send(Ok(InitiateResponse { event: Some(e) })).await;
+    let res = tx.send(Ok(InitiateResponse { event: Some(e) })).await;
+    info!("result: {:?}", res)
 }
 
 async fn create_initiate_response<A>(

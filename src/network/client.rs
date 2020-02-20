@@ -37,6 +37,7 @@ impl Client {
 #[async_trait]
 impl Connection for Client {
     async fn write(&mut self, buf: &[u8]) -> Result<(), Error> {
+        trace!("write {:?}", hex::encode(buf));
         let _ = self.stream.write(buf).await;
         Ok(())
     }
@@ -47,6 +48,7 @@ impl Connection for Client {
             .read(&mut buf)
             .await
             .map_err(|_| Error::CannotRead)?;
+        trace!("read {:?}", hex::encode(&buf[0..n]));
         Ok(Vec::from(&buf[..n]))
     }
     async fn shutdown(&mut self) -> Result<(), Error> {

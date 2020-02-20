@@ -3,6 +3,7 @@ use crate::errors::Error;
 use crate::message::Message;
 use crate::network::client::Client;
 use crate::network::peer::Peer;
+use crate::network::server::ServerConnection;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::ops::Deref;
@@ -10,7 +11,7 @@ use std::ops::DerefMut;
 use std::sync::{Arc, RwLock};
 use tokio::net::TcpStream;
 pub enum Connections {
-    Incomeing(TcpStream),
+    Incomeing(ServerConnection),
     Outgoing(Client),
 }
 // #[derive(Clone)]
