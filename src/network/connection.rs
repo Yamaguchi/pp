@@ -1,4 +1,6 @@
+use crate::crypto::transporter::Transporter;
 use crate::errors::Error;
+use crate::message::Message;
 use async_trait::async_trait;
 use snow::TransportState;
 use tokio::io::AsyncReadExt;
@@ -10,6 +12,11 @@ pub trait Connection {
     async fn write(&mut self, buf: &[u8]) -> Result<(), Error>;
     async fn read(&mut self) -> Result<Vec<u8>, Error>;
     async fn shutdown(&mut self) -> Result<(), Error>;
+    async fn send_message(&mut self, message: Message) -> Result<(), Error>;
+    async fn receive_message(
+        &mut self,
+        rest: &mut [u8],
+    ) -> Result<(Option<Message>, Vec<u8>), Error>;
 }
 
 pub struct ConnectionImpl {
@@ -42,6 +49,30 @@ impl Connection for ConnectionImpl {
             .map_err(|_| Error::CannotRead)?;
         trace!("read {:?}", hex::encode(&buf[0..n]));
         Ok(Vec::from(&buf[..n]))
+    }
+    async fn send_message(&mut self, message: Message) -> Result<(), Error> {
+        let mut buf = [0u8; 65535];
+        let mut t = self.transport.as_mut().unwrap();
+        let n = Transporter::write_message(&mut t, &mut buf, message)?;
+        self.stream.write(&buf[0..n]).await.unwrap();
+        Ok(())
+    }
+    async fn receive_message(
+        &mut self,
+        rest: &mut [u8],
+    ) -> Result<(Option<Message>, Vec<u8>), Error> {
+        let mut read_buffer = [0u8; 65535];
+        let n = self
+            .stream
+            .read(&mut read_buffer)
+            .await
+            .map_err(|_| Error::CannotRead)?;
+        let mut buffer = [0u8; 65535 * 2];
+        let vec: Vec<u8> = rest.iter().chain(&read_buffer[0..n]).map(|&b| b).collect();
+        buffer.copy_from_slice(&vec[..]);
+        let mut t = self.transport.as_mut().unwrap();
+        let (message, rest) = Transporter::read_message(&mut t, &buffer[0..rest.len() + n])?;
+        Ok((message, rest))
     }
     async fn shutdown(&mut self) -> Result<(), Error> {
         Ok(())

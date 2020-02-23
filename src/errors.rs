@@ -5,4 +5,6 @@ pub enum Error {
     CannotRead,
     CannotGetLock,
     AuthenticationFailed,
+    TransportError,
+    UnknownMessage,
 }

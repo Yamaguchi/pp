@@ -1,6 +1,8 @@
 use crate::crypto::curves::Ed25519;
 use crate::key::PublicKey;
+use crate::message::Message;
 use std::net::SocketAddr;
+use tokio::sync::mpsc::Sender;
 
 #[derive(Clone, Debug)]
 pub struct Peer {
@@ -15,6 +17,20 @@ impl Peer {
             public_key: None,
             addr: addr,
             state: PeerState::Init,
+        }
+    }
+
+    pub async fn handle_request(m: Message, mut tx: Sender<Message>) {
+        match m {
+            Message::RequestPing => {
+                let ping = Message::build_ping();
+                tx.send(ping).await.ok();
+            }
+            Message::Ping(nonce) => {
+                let pong = Message::Pong(nonce);
+                tx.send(pong).await.ok();
+            }
+            _ => {}
         }
     }
 }

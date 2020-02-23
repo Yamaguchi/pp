@@ -58,7 +58,7 @@ impl Transporter {
         let len_payload = state
             .write_message(&payload, &mut enc_payload[..])
             .map_err(|_| Error::TransportError)?;
-        vec.write(&enc_payload[..len_payload]);
+        vec.write(&enc_payload[..len_payload]).unwrap();
         buffer.copy_from_slice(&vec[..]);
         Ok(vec.len())
     }
