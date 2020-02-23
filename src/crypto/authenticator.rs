@@ -65,7 +65,7 @@ impl Authenticator {
         let len = handshake
             .write_message(&[], &mut buf)
             .map_err(|_| Error::AuthenticationFailed)?;
-        let _ = connection.write(&mut buf[0..len]).await;
+        connection.write(&mut buf[0..len]).await?;
         Ok(handshake)
     }
 
@@ -77,10 +77,9 @@ impl Authenticator {
         while !handshake.is_handshake_finished() {
             let mut buf = [0u8; 65535];
             let incoming = connection.read().await?;
-            let len = handshake
+            let _ = handshake
                 .read_message(&incoming[..], &mut buf)
                 .map_err(|_| Error::AuthenticationFailed)?;
-            assert_eq!(len, 0);
             if handshake.is_handshake_finished() {
                 break;
             }
@@ -90,8 +89,9 @@ impl Authenticator {
             let _ = connection.write(&mut buf[0..len]).await;
         }
 
-        Ok(handshake
-            .into_transport_mode()
-            .map_err(|_| Error::AuthenticationFailed)?)
+        Ok(handshake.into_transport_mode().map_err(|e| {
+            error!("{}", e);
+            Error::AuthenticationFailed
+        })?)
     }
 }
