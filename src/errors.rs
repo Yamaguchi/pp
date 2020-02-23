@@ -5,5 +5,4 @@ pub enum Error {
     CannotRead,
     CannotGetLock,
     AuthenticationFailed,
-    PeerNotFound,
 }

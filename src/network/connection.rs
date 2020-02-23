@@ -1,8 +1,6 @@
 use crate::errors::Error;
 use async_trait::async_trait;
 use snow::TransportState;
-use std::marker::Sized;
-use std::net::SocketAddr;
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;

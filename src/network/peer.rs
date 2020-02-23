@@ -1,8 +1,5 @@
 use crate::crypto::curves::Ed25519;
-use crate::errors::Error;
 use crate::key::PublicKey;
-use crate::message::Message;
-use crate::network::connection::Connection;
 use std::net::SocketAddr;
 
 #[derive(Clone, Debug)]

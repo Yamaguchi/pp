@@ -82,14 +82,6 @@ impl<T> Clone for PublicKey<T> {
     }
 }
 
-impl<T> PublicKey<T> {
-    pub fn new(bytes: &[u8]) -> Self {
-        PublicKey::<T> {
-            inner: Vec::from(bytes),
-            _phantom: PhantomData,
-        }
-    }
-}
 impl<T> Eq for PublicKey<T> {}
 
 impl<T> PartialEq for PublicKey<T> {

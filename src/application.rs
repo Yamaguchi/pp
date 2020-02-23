@@ -31,5 +31,4 @@ impl NetworkApplication {
             private_key: PrivateKey::<Ed25519>::new(&random_bytes),
         }
     }
-    async fn run(&mut self) {}
 }

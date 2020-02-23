@@ -5,20 +5,12 @@ use crate::errors::Error;
 use crate::key::PrivateKey;
 use crate::network::connection::ConnectionImpl;
 use crate::node::*;
-use async_trait::async_trait;
-use snow::TransportState;
 use std::net::SocketAddr;
 use std::ops::Deref;
 use std::sync::{Arc, RwLock};
-use tokio::io::AsyncReadExt;
-use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
 use tokio::net::TcpStream;
 use tokio::stream::StreamExt;
-
-use tokio::sync::mpsc;
-
-use crate::network::peer::Peer;
 
 use crate::crypto::authenticator::Authenticator;
 
@@ -84,8 +76,5 @@ where
         let transport = authenticator.auth(&mut server, false).await?;
         server.transport = Some(transport);
         add_connection(Arc::clone(&app), peer.addr, server)
-    }
-    async fn handle_client(&self, connection: &ConnectionImpl) -> Result<(), std::io::Error> {
-        Ok(())
     }
 }
