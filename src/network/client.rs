@@ -2,14 +2,8 @@ use crate::crypto::authenticator::Authenticator;
 use crate::crypto::curves::Ed25519;
 use crate::errors::Error;
 use crate::key::PrivateKey;
-use crate::network::connection::Connection;
 use crate::network::connection::ConnectionImpl;
-
-use async_trait::async_trait;
-use snow::TransportState;
 use std::net::SocketAddr;
-use tokio::io::AsyncReadExt;
-use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
 
 pub struct Client {}

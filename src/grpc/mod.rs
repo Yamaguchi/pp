@@ -1,7 +1,6 @@
 use crate::application::Application;
 use crate::errors::Error;
 use crate::network::client::Client;
-use crate::node::Connections;
 use crate::node::{add_connection, add_peer};
 
 use network::initiate_response::Event;
@@ -138,7 +137,7 @@ async fn create_initiate_response<A>(
             return;
         }
     };
-    match add_connection(Arc::clone(&app), peer.addr, Connections::Outgoing(client)) {
+    match add_connection(Arc::clone(&app), peer.addr, client) {
         Ok(_) => {
             response(tx.clone(), connected()).await;
         }

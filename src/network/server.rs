@@ -3,9 +3,7 @@ use crate::configuration::ServerConfiguration;
 use crate::crypto::curves::Ed25519;
 use crate::errors::Error;
 use crate::key::PrivateKey;
-use crate::network::connection::Connection;
 use crate::network::connection::ConnectionImpl;
-use crate::node::Connections;
 use crate::node::*;
 use async_trait::async_trait;
 use snow::TransportState;
@@ -85,7 +83,7 @@ where
         let authenticator = Authenticator::new(key);
         let transport = authenticator.auth(&mut server, false).await?;
         server.transport = Some(transport);
-        add_connection(Arc::clone(&app), peer.addr, Connections::Incomeing(server))
+        add_connection(Arc::clone(&app), peer.addr, server)
     }
     async fn handle_client(&self, connection: &ConnectionImpl) -> Result<(), std::io::Error> {
         Ok(())

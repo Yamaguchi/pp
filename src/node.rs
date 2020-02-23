@@ -10,28 +10,25 @@ use std::ops::Deref;
 use std::ops::DerefMut;
 use std::sync::{Arc, RwLock};
 use tokio::net::TcpStream;
-pub enum Connections {
-    Incomeing(ConnectionImpl),
-    Outgoing(ConnectionImpl),
-}
+
 // #[derive(Clone)]
 pub struct Node {
     peers: HashMap<SocketAddr, Peer>,
-    connections: HashMap<SocketAddr, Connections>,
+    connections: HashMap<SocketAddr, ConnectionImpl>,
 }
 
 impl Node {
     pub fn new() -> Self {
         Node {
             peers: HashMap::<SocketAddr, Peer>::new(),
-            connections: HashMap::<SocketAddr, Connections>::new(),
+            connections: HashMap::<SocketAddr, ConnectionImpl>::new(),
         }
     }
 
     pub fn add_connection(
         &mut self,
         addr: SocketAddr,
-        connection: Connections,
+        connection: ConnectionImpl,
     ) -> Result<(), Error> {
         self.connections.insert(addr, connection);
         Ok(())
@@ -96,7 +93,7 @@ where
 pub fn add_connection<A>(
     app: Arc<RwLock<A>>,
     addr: SocketAddr,
-    conn: Connections,
+    conn: ConnectionImpl,
 ) -> Result<(), Error>
 where
     A: Application + 'static + Send + Sync,

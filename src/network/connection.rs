@@ -4,9 +4,7 @@ use snow::TransportState;
 use std::marker::Sized;
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
-use tokio::net::TcpListener;
 use tokio::net::TcpStream;
-use tokio::stream::StreamExt;
 
 #[async_trait]
 pub trait Connection: Sized {
@@ -19,6 +17,7 @@ pub struct ConnectionImpl {
     pub stream: TcpStream,
     pub transport: Option<TransportState>,
 }
+
 impl ConnectionImpl {
     pub fn new(stream: TcpStream) -> Self {
         ConnectionImpl {
@@ -27,11 +26,12 @@ impl ConnectionImpl {
         }
     }
 }
+
 #[async_trait]
 impl Connection for ConnectionImpl {
     async fn write(&mut self, buf: &[u8]) -> Result<(), Error> {
         trace!("write {:?}", hex::encode(buf));
-        let _ = self.stream.write(buf).await;
+        self.stream.write(buf).await.unwrap();
         Ok(())
     }
     async fn read(&mut self) -> Result<Vec<u8>, Error> {

@@ -1,7 +1,7 @@
 use crate::crypto::curves::Ed25519;
 use crate::errors::Error;
 use crate::key::PrivateKey;
-use crate::network::connection::Connection;
+use crate::network::connection::*;
 use snow::params::NoiseParams;
 use snow::HandshakeState;
 use snow::TransportState;
@@ -17,16 +17,13 @@ impl Authenticator {
         }
     }
 
-    pub async fn auth<T>(
+    pub async fn auth(
         &self,
-        connection: &mut T,
+        connection: &mut ConnectionImpl,
         initiator: bool,
-    ) -> Result<TransportState, Error>
-    where
-        T: Connection,
-    {
+    ) -> Result<TransportState, Error> {
         info!("auth ... ");
-        let mut handshake = self.start_handshake(connection, initiator)?;
+        let mut handshake = self.start_handshake(initiator)?;
         if initiator {
             handshake = self.act1(handshake, connection).await?;
         }
@@ -35,10 +32,7 @@ impl Authenticator {
         Ok(transport)
     }
 
-    fn start_handshake<T>(&self, _connection: &T, initiator: bool) -> Result<HandshakeState, Error>
-    where
-        T: Connection,
-    {
+    fn start_handshake(&self, initiator: bool) -> Result<HandshakeState, Error> {
         //XX:
         //   -> e
         //   <- e, ee, s, es
@@ -62,14 +56,11 @@ impl Authenticator {
         Ok(handshake)
     }
 
-    async fn act1<T>(
+    async fn act1(
         &self,
         mut handshake: HandshakeState,
-        connection: &mut T,
-    ) -> Result<HandshakeState, Error>
-    where
-        T: Connection,
-    {
+        connection: &mut ConnectionImpl,
+    ) -> Result<HandshakeState, Error> {
         let mut buf = [0u8; 65535];
         let len = handshake
             .write_message(&[], &mut buf)
@@ -78,14 +69,11 @@ impl Authenticator {
         Ok(handshake)
     }
 
-    async fn act2<T>(
+    async fn act2(
         &self,
         mut handshake: HandshakeState,
-        connection: &mut T,
-    ) -> Result<TransportState, Error>
-    where
-        T: Connection,
-    {
+        connection: &mut ConnectionImpl,
+    ) -> Result<TransportState, Error> {
         while !handshake.is_handshake_finished() {
             let mut buf = [0u8; 65535];
             let incoming = connection.read().await?;
