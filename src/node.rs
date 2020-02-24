@@ -9,8 +9,9 @@ use std::net::SocketAddr;
 use std::ops::Deref;
 use std::ops::DerefMut;
 use std::sync::{Arc, RwLock};
+use std::time::Duration;
 use tokio::sync::mpsc::channel;
-
+use tokio::time;
 // #[derive(Clone)]
 pub struct Node {
     peers: HashMap<SocketAddr, Peer>,
@@ -40,14 +41,18 @@ impl Node {
 
         //channel for recv Message from other node.
         let (recv_tx, mut recv_rx) = channel::<Message>(1);
+        let mut tx = recv_tx.clone();
         tokio::spawn(async move {
             let mut buffer = [0u8; 65535];
+            while let Some(m) = send_rx.recv().await {
+                connection.send_message(m).await.unwrap();
+            }
             while let Ok(r) = connection.receive_message(&mut buffer).await {
                 match r {
                     (Some(m), rest) => {
                         buffer = [0u8; 65535];
                         buffer.copy_from_slice(&rest[..]);
-                        recv_tx.clone().send(m.clone()).await.ok();
+                        tx.send(m.clone()).await.ok();
                     }
                     (None, rest) => {
                         buffer = [0u8; 65535];
@@ -55,15 +60,22 @@ impl Node {
                     }
                 }
             }
-            while let Some(m) = send_rx.recv().await {
-                connection.send_message(m).await.unwrap();
+        });
+        let mut tx = recv_tx.clone();
+        tokio::spawn(async move {
+            let mut interval = time::interval(Duration::from_secs(10));
+            loop {
+                interval.tick().await;
+                tx.send(Message::RequestPing).await.ok();
             }
         });
+
         tokio::spawn(async move {
             while let Some(m) = recv_rx.recv().await {
                 Peer::handle_request(m, send_tx.clone()).await;
             }
         });
+
         Ok(())
     }
 

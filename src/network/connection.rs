@@ -51,10 +51,9 @@ impl Connection for ConnectionImpl {
         Ok(Vec::from(&buf[..n]))
     }
     async fn send_message(&mut self, message: Message) -> Result<(), Error> {
-        let mut buf = [0u8; 65535];
         let mut t = self.transport.as_mut().unwrap();
-        let n = Transporter::write_message(&mut t, &mut buf, message)?;
-        self.stream.write(&buf[0..n]).await.unwrap();
+        let buf = Transporter::write_message(&mut t, message)?;
+        self.stream.write(&buf[..]).await.unwrap();
         Ok(())
     }
     async fn receive_message(

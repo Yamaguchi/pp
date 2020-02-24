@@ -5,6 +5,6 @@ pub enum Error {
     CannotRead,
     CannotGetLock,
     AuthenticationFailed,
-    TransportError,
+    TransportError(snow::error::Error),
     UnknownMessage,
 }

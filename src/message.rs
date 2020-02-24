@@ -3,7 +3,7 @@ use byteorder::ReadBytesExt;
 use byteorder::{NetworkEndian, WriteBytesExt};
 use rand::Rng;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Message {
     RequestPing,
     Ping(u32),
