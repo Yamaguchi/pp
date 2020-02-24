@@ -1,6 +1,7 @@
 use crate::application::Application;
 use crate::errors::Error;
 use crate::message::Message;
+use crate::network::connection::Actions;
 use crate::network::connection::Connection;
 use crate::network::connection::ConnectionImpl;
 use crate::network::peer::Peer;
@@ -8,10 +9,13 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::ops::Deref;
 use std::ops::DerefMut;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
+use tokio::stream::StreamExt;
 use tokio::sync::mpsc::channel;
+use tokio::sync::mpsc::unbounded_channel;
 use tokio::time;
+
 // #[derive(Clone)]
 pub struct Node {
     peers: HashMap<SocketAddr, Peer>,
@@ -37,27 +41,36 @@ impl Node {
         // self.connections.insert(addr, connection);
 
         //channel for send Message to other node.
-        let (send_tx, mut send_rx) = channel::<Message>(1);
+        let (send_tx, send_rx) = unbounded_channel::<Message>();
 
         //channel for recv Message from other node.
         let (recv_tx, mut recv_rx) = channel::<Message>(1);
         let mut tx = recv_tx.clone();
+        connection.sender = Some(Arc::new(Mutex::new(send_rx)));
         tokio::spawn(async move {
-            let mut buffer = [0u8; 65535];
-            while let Some(m) = send_rx.recv().await {
-                connection.send_message(m).await.unwrap();
-            }
-            while let Ok(r) = connection.receive_message(&mut buffer).await {
-                match r {
-                    (Some(m), rest) => {
-                        buffer = [0u8; 65535];
-                        buffer.copy_from_slice(&rest[..]);
-                        tx.send(m.clone()).await.ok();
-                    }
-                    (None, rest) => {
-                        buffer = [0u8; 65535];
-                        buffer.copy_from_slice(&rest[..]);
-                    }
+            // loop {
+            let mut buffer = vec![];
+            while let Some(result) = connection.next().await {
+                match result {
+                    Ok(action) => match action {
+                        Actions::Send(m) => {
+                            connection.send_message(m).await.unwrap();
+                        }
+                        Actions::Receive => {
+                            let recv = connection.receive_message(&mut buffer).await;
+                            match recv {
+                                Ok((Some(m), rest)) => {
+                                    buffer = rest;
+                                    tx.send(m.clone()).await.ok();
+                                }
+                                Ok((None, rest)) => {
+                                    buffer = rest;
+                                }
+                                _ => {}
+                            }
+                        }
+                    },
+                    Err(_) => {}
                 }
             }
         });
@@ -66,6 +79,7 @@ impl Node {
             let mut interval = time::interval(Duration::from_secs(10));
             loop {
                 interval.tick().await;
+                info!("send Message::RequestPing");
                 tx.send(Message::RequestPing).await.ok();
             }
         });

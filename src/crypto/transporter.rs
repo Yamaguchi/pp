@@ -13,28 +13,28 @@ impl Transporter {
         buffer: &[u8],
     ) -> Result<(Option<Message>, Vec<u8>), Error> {
         let mut rest: Vec<u8> = vec![];
-        if buffer.len() < 16 {
+        if buffer.len() < 18 {
             rest.copy_from_slice(buffer);
             return Ok((None, rest));
         }
-        let mut decrypted = [0u8; 16];
+        let mut decrypted = [0u8; 18];
         state
-            .read_message(buffer, &mut decrypted)
+            .read_message(&buffer[0..18], &mut decrypted)
             .map_err(|e| Error::TransportError(e))?;
         let mut c = Cursor::new(&decrypted);
         let body_len: u16 = c.read_u16::<NetworkEndian>().unwrap();
-        let len: usize = (body_len + 16) as usize;
+        let len: usize = (2 + 16 + body_len + 16) as usize;
         if buffer.len() < len {
             rest.copy_from_slice(buffer);
             return Ok((None, rest));
         }
 
         let mut decrypted = [0u8; 65535];
-        state
-            .read_message(&buffer[16..len], &mut decrypted)
+        let n = state
+            .read_message(&buffer[18..len], &mut decrypted)
             .map_err(|e| Error::TransportError(e))?;
-        let message = Message::parse(&decrypted)?;
-        rest.copy_from_slice(&buffer[len..]);
+        let message = Message::parse(&decrypted[..n])?;
+        rest.extend(&buffer[len..]);
         Ok((Some(message), rest))
     }
     pub fn write_message(state: &mut TransportState, message: Message) -> Result<Vec<u8>, Error> {

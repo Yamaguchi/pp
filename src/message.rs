@@ -21,14 +21,14 @@ impl Message {
         let mut v = vec![];
         match self {
             Message::Ping(nonce) | Message::Pong(nonce) => {
-                v.push(self.to_type_id());
+                v.write_u16::<NetworkEndian>(self.to_type_id()).unwrap();
                 v.write_u32::<NetworkEndian>(*nonce).unwrap();
             }
             _ => {}
         }
         v
     }
-    fn to_type_id(&self) -> u8 {
+    fn to_type_id(&self) -> u16 {
         match self {
             Message::Ping(_) => 0x01,
             Message::Pong(_) => 0x02,
@@ -46,7 +46,7 @@ impl Message {
             }
             0x02 => {
                 let nonce = body_buf.read_u32::<NetworkEndian>().unwrap();
-                Message::Ping(nonce)
+                Message::Pong(nonce)
             }
             0x11 => Message::RequestPing,
             _ => return Err(Error::UnknownMessage),
