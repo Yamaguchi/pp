@@ -4,6 +4,8 @@ package network.grpc;
 
 service NetworkService {
   rpc Initiate(InitiateRequest) returns (stream InitiateResponse);
+  rpc Send(SendRequest) returns (SendResponse);
+  rpc Recv(RecvRequest) returns (stream RecvResponse);
 }
 
 message Initialized {
@@ -41,5 +43,34 @@ message InitiateResponse {
     AlreadyConnected already_connected= 4;
     Disconnected disconnected= 5;
   }
+}
+
+message Success {
+
+}
+
+message Error {
+  string description = 1;
+}
+
+message SendRequest {
+  string public_key = 1;
+  string data = 2;
+}
+
+message SendResponse {
+  oneof event {
+    Success success = 1;
+    Error  error = 2;
+  }
+}
+
+message RecvRequest {
+  string public_key = 1;
+}
+
+message RecvResponse {
+  string remote_public_key = 1;
+  string data = 2;
 }
 

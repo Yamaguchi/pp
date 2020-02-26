@@ -6,7 +6,9 @@ use crate::node::{add_connection, add_peer};
 use network::initiate_response::Event;
 use network::network_service_server::{NetworkService, NetworkServiceServer};
 use network::{AlreadyConnected, Connected, Disconnected};
-use network::{InitiateRequest, InitiateResponse};
+use network::{
+    InitiateRequest, InitiateResponse, RecvRequest, RecvResponse, SendRequest, SendResponse,
+};
 use std::net::SocketAddr;
 use std::ops::Deref;
 use std::sync::{Arc, RwLock};
@@ -67,6 +69,9 @@ where
     A: Application + 'static + Send + Sync,
 {
     type InitiateStream = mpsc::Receiver<Result<InitiateResponse, Status>>;
+
+    type RecvStream = mpsc::Receiver<Result<RecvResponse, Status>>;
+
     async fn initiate(
         &self,
         request: Request<InitiateRequest>,
@@ -87,6 +92,23 @@ where
             create_initiate_response(cloned, tx, addr).await;
         });
         Ok(Response::<Self::InitiateStream>::new(rx))
+    }
+
+    async fn send(&self, request: Request<SendRequest>) -> Result<Response<SendResponse>, Status> {
+        info!("send ...");
+        let response = SendResponse {
+            event: Some(network::send_response::Event::Success(network::Success {})),
+        };
+        Ok(Response::<SendResponse>::new(response))
+    }
+
+    async fn recv(
+        &self,
+        request: Request<RecvRequest>,
+    ) -> Result<Response<Self::RecvStream>, Status> {
+        info!("recv ...");
+        let (tx, rx) = mpsc::channel(1);
+        Ok(Response::<Self::RecvStream>::new(rx))
     }
 }
 
