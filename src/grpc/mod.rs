@@ -1,8 +1,9 @@
 use crate::application::Application;
 use crate::errors::Error;
+use crate::key::PublicKey;
+use crate::message::Message;
 use crate::network::client::Client;
-use crate::node::{add_connection, add_peer};
-
+use crate::node::{add_connection, add_peer, send_to_peer};
 use network::initiate_response::Event;
 use network::network_service_server::{NetworkService, NetworkServiceServer};
 use network::{AlreadyConnected, Connected, Disconnected};
@@ -11,6 +12,7 @@ use network::{
 };
 use std::net::SocketAddr;
 use std::ops::Deref;
+use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
@@ -96,8 +98,24 @@ where
 
     async fn send(&self, request: Request<SendRequest>) -> Result<Response<SendResponse>, Status> {
         info!("send ...");
-        let response = SendResponse {
-            event: Some(network::send_response::Event::Success(network::Success {})),
+
+        let cloned = Arc::clone(&self.app);
+        let public_key = request.get_ref().public_key.clone();
+        let data = request.get_ref().data.clone();
+        let result = send_to_peer(
+            cloned,
+            Message::RequestData(hex::decode(data).unwrap()),
+            &PublicKey::from_str(&public_key).unwrap(),
+        );
+        let response = match result {
+            Ok(_) => SendResponse {
+                event: Some(network::send_response::Event::Success(network::Success {})),
+            },
+            Err(e) => SendResponse {
+                event: Some(network::send_response::Event::Error(network::Error {
+                    description: format!("{:?}", e),
+                })),
+            },
         };
         Ok(Response::<SendResponse>::new(response))
     }

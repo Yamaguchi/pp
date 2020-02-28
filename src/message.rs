@@ -6,8 +6,10 @@ use rand::Rng;
 #[derive(Clone, Debug)]
 pub enum Message {
     RequestPing,
+    RequestData(Vec<u8>),
     Ping(u32),
     Pong(u32),
+    Data(Vec<u8>),
 }
 
 impl Message {
@@ -24,6 +26,10 @@ impl Message {
                 v.write_u16::<NetworkEndian>(self.to_type_id()).unwrap();
                 v.write_u32::<NetworkEndian>(*nonce).unwrap();
             }
+            Message::Data(d) => {
+                v.write_u16::<NetworkEndian>(self.to_type_id()).unwrap();
+                v.extend(d);
+            }
             _ => {}
         }
         v
@@ -32,7 +38,9 @@ impl Message {
         match self {
             Message::Ping(_) => 0x01,
             Message::Pong(_) => 0x02,
+            Message::Data(_) => 0x03,
             Message::RequestPing => 0x11,
+            Message::RequestData(_) => 0x12,
         }
     }
 
@@ -48,7 +56,15 @@ impl Message {
                 let nonce = body_buf.read_u32::<NetworkEndian>().unwrap();
                 Message::Pong(nonce)
             }
+            0x03 => {
+                let data = Vec::from(body_buf);
+                Message::Data(data)
+            }
             0x11 => Message::RequestPing,
+            0x12 => {
+                let data = Vec::from(body_buf);
+                Message::RequestData(data)
+            }
             _ => return Err(Error::UnknownMessage),
         };
         Ok(message)

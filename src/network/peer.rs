@@ -20,20 +20,28 @@ impl Peer {
         }
     }
 
-    pub async fn handle_request(m: Message, tx: UnboundedSender<Message>) {
-        info!("handle_request: {:?}", m);
+    pub async fn handle_message(m: Message, tx: UnboundedSender<Message>) {
+        info!("handle_message: {:?}", m);
         match m {
             Message::RequestPing => {
                 let ping = Message::build_ping();
-                // tx.send(ping).await.ok();
                 tx.send(ping).ok();
             }
             Message::Ping(nonce) => {
                 let pong = Message::Pong(nonce);
-                // tx.send(pong).await.ok();
                 tx.send(pong).ok();
             }
-            _ => {}
+            Message::Pong(_) => {
+                // Do nothing.
+            }
+            Message::Data(data) => {
+                info!("receive data: {:?}", hex::encode(data));
+            }
+            Message::RequestData(data) => {
+                let data = Message::Data(data);
+                tx.send(data).ok();
+            }
+            _ => panic!(),
         }
     }
 }

@@ -1,5 +1,6 @@
 use crate::crypto::transporter::Transporter;
 use crate::errors::Error;
+use crate::key::PublicKey;
 use crate::message::Message;
 use async_trait::async_trait;
 use snow::TransportState;
@@ -29,7 +30,7 @@ pub trait Connection {
 pub struct ConnectionImpl {
     pub stream: TcpStream,
     pub transport: Option<TransportState>,
-    pub sender: Option<Arc<Mutex<UnboundedReceiver<Message>>>>,
+    pub relayer: Option<Arc<Mutex<UnboundedReceiver<Message>>>>,
 }
 
 impl ConnectionImpl {
@@ -37,7 +38,13 @@ impl ConnectionImpl {
         ConnectionImpl {
             stream: stream,
             transport: None,
-            sender: None,
+            relayer: None,
+        }
+    }
+    pub fn remote_static_key<T>(&self) -> Option<PublicKey<T>> {
+        match &self.transport {
+            Some(t) => Some(PublicKey::new(t.get_remote_static().unwrap())),
+            None => None,
         }
     }
 }
@@ -116,7 +123,7 @@ impl Stream for ConnectionImpl {
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         // First poll the `UnboundedReceiver`.
-        let arc = Arc::clone(&self.sender.as_ref().unwrap());
+        let arc = Arc::clone(&self.relayer.as_ref().unwrap());
         let mut guard = arc.lock().unwrap();
         let mut sender = guard.deref_mut();
         if let Poll::Ready(Some(v)) = Pin::new(&mut sender).poll_next(cx) {

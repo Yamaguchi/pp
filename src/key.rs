@@ -1,5 +1,6 @@
 use std::cmp::*;
 use std::fmt;
+use std::hash::Hash;
 use std::marker::PhantomData;
 
 pub struct PrivateKey<T> {
@@ -56,9 +57,33 @@ impl<T> PartialOrd for PrivateKey<T> {
     }
 }
 
+#[derive(Hash)]
 pub struct PublicKey<T> {
     pub inner: Vec<u8>,
     pub _phantom: PhantomData<T>,
+}
+
+impl<T> PublicKey<T> {
+    pub fn new(bytes: &[u8]) -> Self {
+        PublicKey::<T> {
+            inner: Vec::from(bytes),
+            _phantom: PhantomData,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InvalidPublicKey {}
+
+impl<T> std::str::FromStr for PublicKey<T> {
+    type Err = InvalidPublicKey;
+    fn from_str(s: &str) -> Result<Self, InvalidPublicKey> {
+        if let Ok(decoded) = hex::decode(s) {
+            Ok(PublicKey::new(&decoded))
+        } else {
+            Err(InvalidPublicKey {})
+        }
+    }
 }
 
 impl<T> fmt::Display for PublicKey<T> {

@@ -1,5 +1,7 @@
 use crate::application::Application;
+use crate::crypto::curves::Ed25519;
 use crate::errors::Error;
+use crate::key::PublicKey;
 use crate::message::Message;
 use crate::network::connection::Actions;
 use crate::network::connection::Connection;
@@ -14,19 +16,20 @@ use std::time::Duration;
 use tokio::stream::StreamExt;
 use tokio::sync::mpsc::channel;
 use tokio::sync::mpsc::unbounded_channel;
+use tokio::sync::mpsc::Sender;
 use tokio::time;
 
 // #[derive(Clone)]
 pub struct Node {
     peers: HashMap<SocketAddr, Peer>,
-    connections: HashMap<SocketAddr, ConnectionImpl>,
+    message_handlers: HashMap<PublicKey<Ed25519>, Sender<Message>>,
 }
 
 impl Node {
     pub fn new() -> Self {
         Node {
             peers: HashMap::<SocketAddr, Peer>::new(),
-            connections: HashMap::<SocketAddr, ConnectionImpl>::new(),
+            message_handlers: HashMap::<PublicKey<Ed25519>, Sender<Message>>::new(),
         }
     }
 
@@ -35,18 +38,17 @@ impl Node {
         addr: SocketAddr,
         mut connection: ConnectionImpl,
     ) -> Result<(), Error> {
-        if self.connections.contains_key(&addr) {
-            return Err(Error::PeerAlreadyConnected);
-        }
-        // self.connections.insert(addr, connection);
-
         //channel for send Message to other node.
         let (send_tx, send_rx) = unbounded_channel::<Message>();
 
         //channel for recv Message from other node.
         let (recv_tx, mut recv_rx) = channel::<Message>(1);
         let mut tx = recv_tx.clone();
-        connection.sender = Some(Arc::new(Mutex::new(send_rx)));
+        connection.relayer = Some(Arc::new(Mutex::new(send_rx)));
+        let key = connection.remote_static_key();
+        info!("remote static key is {:?}", key);
+        self.message_handlers.insert(key.unwrap(), recv_tx.clone());
+
         tokio::spawn(async move {
             // loop {
             let mut buffer = vec![];
@@ -66,7 +68,9 @@ impl Node {
                                 Ok((None, rest)) => {
                                     buffer = rest;
                                 }
-                                _ => {}
+                                Err(e) => {
+                                    error!("{:?}", e);
+                                }
                             }
                         }
                     },
@@ -86,7 +90,7 @@ impl Node {
 
         tokio::spawn(async move {
             while let Some(m) = recv_rx.recv().await {
-                Peer::handle_request(m, send_tx.clone()).await;
+                Peer::handle_message(m, send_tx.clone()).await;
             }
         });
 
@@ -101,6 +105,28 @@ impl Node {
         self.peers.insert(addr, peer.clone());
         Ok(peer)
     }
+    fn send_to_peer(&mut self, message: Message, key: &PublicKey<Ed25519>) -> Result<(), Error> {
+        let mut handler = self.message_handlers[key].clone();
+        tokio::spawn(async move {
+            handler.send(message).await;
+        });
+        Ok(())
+    }
+}
+
+pub fn send_to_peer<A>(
+    app: Arc<RwLock<A>>,
+    message: Message,
+    key: &PublicKey<Ed25519>,
+) -> Result<(), Error>
+where
+    A: Application + 'static + Send + Sync,
+{
+    let guard_app = app.read().unwrap();
+    let app = guard_app.deref();
+    let mut guard_node = app.node().ok().unwrap();
+    let node = guard_node.deref_mut();
+    node.send_to_peer(message, key)
 }
 
 pub fn add_peer<A>(app: Arc<RwLock<A>>, addr: SocketAddr) -> Result<Peer, Error>
