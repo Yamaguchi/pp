@@ -122,10 +122,10 @@ where
 
     async fn recv(
         &self,
-        request: Request<RecvRequest>,
+        _request: Request<RecvRequest>,
     ) -> Result<Response<Self::RecvStream>, Status> {
         info!("recv ...");
-        let (tx, rx) = mpsc::channel(1);
+        let (_tx, rx) = mpsc::channel(1);
         Ok(Response::<Self::RecvStream>::new(rx))
     }
 }
@@ -183,7 +183,7 @@ async fn create_initiate_response<A>(
         }
     };
     debug!("create_initiate_response connected ...");
-    match add_connection(Arc::clone(&app), peer.addr, client) {
+    match add_connection(Arc::clone(&app), client) {
         Ok(_) => {
             // schedule_ping(Arc::clone(&app), peer.addr);
             response(tx.clone(), connected()).await;

@@ -70,11 +70,11 @@ where
     {
         let addr: SocketAddr = stream.peer_addr().map_err(|_| Error::CannotConnectPeer)?;
         info!("accept ... {:?}", addr);
-        let peer = add_peer(Arc::clone(&app), addr)?;
+        let _peer = add_peer(Arc::clone(&app), addr)?;
         let mut server = ConnectionImpl::new(stream);
         let authenticator = Authenticator::new(key);
         let transport = authenticator.auth(&mut server, false).await?;
         server.transport = Some(transport);
-        add_connection(Arc::clone(&app), peer.addr, server)
+        add_connection(Arc::clone(&app), server)
     }
 }

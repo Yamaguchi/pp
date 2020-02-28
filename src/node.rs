@@ -33,11 +33,7 @@ impl Node {
         }
     }
 
-    pub fn add_connection(
-        &mut self,
-        addr: SocketAddr,
-        mut connection: ConnectionImpl,
-    ) -> Result<(), Error> {
+    pub fn add_connection(&mut self, mut connection: ConnectionImpl) -> Result<(), Error> {
         //channel for send Message to other node.
         let (send_tx, send_rx) = unbounded_channel::<Message>();
 
@@ -106,9 +102,15 @@ impl Node {
         Ok(peer)
     }
     fn send_to_peer(&mut self, message: Message, key: &PublicKey<Ed25519>) -> Result<(), Error> {
+        let cloned_key = key.clone();
         let mut handler = self.message_handlers[key].clone();
         tokio::spawn(async move {
-            handler.send(message).await;
+            match handler.send(message).await {
+                Ok(()) => {}
+                Err(e) => {
+                    error!("[{:?}] send_to_peer: {:?}", cloned_key.clone(), e);
+                }
+            }
         });
         Ok(())
     }
@@ -140,11 +142,7 @@ where
     node.add_peer(addr)
 }
 
-pub fn add_connection<A>(
-    app: Arc<RwLock<A>>,
-    addr: SocketAddr,
-    conn: ConnectionImpl,
-) -> Result<(), Error>
+pub fn add_connection<A>(app: Arc<RwLock<A>>, conn: ConnectionImpl) -> Result<(), Error>
 where
     A: Application + 'static + Send + Sync,
 {
@@ -152,6 +150,6 @@ where
     let app = guard_app.deref();
     let mut guard_node = app.node().ok().unwrap();
     let node = guard_node.deref_mut();
-    let _ = node.add_connection(addr, conn);
+    let _ = node.add_connection(conn);
     Ok(())
 }

@@ -41,7 +41,6 @@ impl Peer {
                 let data = Message::Data(data);
                 tx.send(data).ok();
             }
-            _ => panic!(),
         }
     }
 }
