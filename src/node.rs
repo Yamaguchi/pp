@@ -41,7 +41,12 @@ impl Node {
         let mut tx = recv_tx.clone();
         connection.relayer = Some(Arc::new(Mutex::new(send_rx)));
         let key = connection.remote_static_key();
+        info!("connection is established: {:?}", key.clone().unwrap());
         self.message_handlers.insert(key.unwrap(), recv_tx.clone());
+        let addr = connection
+            .stream
+            .peer_addr()
+            .map_err(|_| Error::CannotConnectPeer)?;
 
         tokio::spawn(async move {
             let mut buffer = vec![];
@@ -73,17 +78,17 @@ impl Node {
         });
         let mut tx = recv_tx.clone();
         tokio::spawn(async move {
-            let mut interval = time::interval(Duration::from_secs(10));
+            let mut interval = time::interval(Duration::from_secs(60));
             loop {
                 interval.tick().await;
                 info!("send Message::RequestPing");
                 tx.send(Message::RequestPing).await.ok();
             }
         });
-
+        let mut peer = self.peers[&addr].clone();
         tokio::spawn(async move {
             while let Some(m) = recv_rx.recv().await {
-                Peer::handle_message(m, send_tx.clone()).await;
+                peer.handle_message(m, send_tx.clone()).await;
             }
         });
 

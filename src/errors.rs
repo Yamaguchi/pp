@@ -7,4 +7,5 @@ pub enum Error {
     AuthenticationFailed,
     TransportError(snow::error::Error),
     UnknownMessage,
+    UnsupportedOperation,
 }

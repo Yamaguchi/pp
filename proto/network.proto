@@ -8,26 +8,6 @@ service NetworkService {
   rpc Recv(RecvRequest) returns (stream RecvResponse);
 }
 
-message Initialized {
-  string public_key = 1;
-}
-
-message Connected {
-  string public_key = 1;
-}
-
-message Authenticated {
-  string public_key = 1;
-  string remote_public_key = 2;
-}
-
-message AlreadyConnected {
-  string public_key = 1;
-}
-
-message Disconnected {
-  string public_key = 1;
-}
 
 message InitiateRequest {
   string public_key = 1;
@@ -40,13 +20,29 @@ message InitiateResponse {
     Initialized initialized = 1;
     Connected connected = 2;
     Authenticated authenticated = 3;
-    AlreadyConnected already_connected= 4;
-    Disconnected disconnected= 5;
+    AlreadyConnected already_connected = 4;
+    Disconnected disconnected = 5;
   }
-}
 
-message Success {
+  message Initialized {
+    string public_key = 1;
+  }
+  message Connected {
+    string public_key = 1;
+  }
 
+  message Authenticated {
+    string public_key = 1;
+    string remote_public_key = 2;
+  }
+
+  message AlreadyConnected {
+    string public_key = 1;
+  }
+
+  message Disconnected {
+    string public_key = 1;
+  }
 }
 
 message Error {
@@ -63,6 +59,10 @@ message SendResponse {
     Success success = 1;
     Error  error = 2;
   }
+
+  message Success {
+
+  }
 }
 
 message RecvRequest {
@@ -70,7 +70,14 @@ message RecvRequest {
 }
 
 message RecvResponse {
-  string remote_public_key = 1;
-  string data = 2;
+  oneof event {
+    Success success = 1;
+    Error  error = 2;
+  }
+  message Success {
+    string remote_public_key = 1;
+    string data = 2;
+  }
 }
+  
 

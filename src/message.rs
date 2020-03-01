@@ -2,11 +2,13 @@ use crate::errors::Error;
 use byteorder::ReadBytesExt;
 use byteorder::{NetworkEndian, WriteBytesExt};
 use rand::Rng;
+use tokio::sync::mpsc::Sender;
 
 #[derive(Clone, Debug)]
 pub enum Message {
     RequestPing,
     RequestData(Vec<u8>),
+    RequestSubscribe(Sender<Message>),
     Ping(u32),
     Pong(u32),
     Data(Vec<u8>),
@@ -34,6 +36,7 @@ impl Message {
         }
         v
     }
+
     fn to_type_id(&self) -> u16 {
         match self {
             Message::Ping(_) => 0x01,
@@ -41,6 +44,18 @@ impl Message {
             Message::Data(_) => 0x03,
             Message::RequestPing => 0x11,
             Message::RequestData(_) => 0x12,
+            Message::RequestSubscribe(_) => 0x13,
+        }
+    }
+
+    pub fn is_p2p(&self) -> bool {
+        match self {
+            Message::Ping(_) => true,
+            Message::Pong(_) => true,
+            Message::Data(_) => true,
+            Message::RequestPing => false,
+            Message::RequestData(_) => false,
+            Message::RequestSubscribe(_) => false,
         }
     }
 
@@ -65,6 +80,7 @@ impl Message {
                 let data = Vec::from(body_buf);
                 Message::RequestData(data)
             }
+            0x13 => return Err(Error::UnsupportedOperation),
             _ => return Err(Error::UnknownMessage),
         };
         Ok(message)

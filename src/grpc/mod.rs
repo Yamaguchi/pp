@@ -1,12 +1,15 @@
 use crate::application::Application;
+use crate::crypto::curves::Ed25519;
 use crate::errors::Error;
 use crate::key::PublicKey;
 use crate::message::Message;
 use crate::network::client::Client;
 use crate::node::{add_connection, add_peer, send_to_peer};
-use network::initiate_response::Event;
+use network::initiate_response;
+use network::initiate_response::{AlreadyConnected, Connected, Disconnected};
 use network::network_service_server::{NetworkService, NetworkServiceServer};
-use network::{AlreadyConnected, Connected, Disconnected};
+use network::recv_response;
+use network::send_response;
 use network::{
     InitiateRequest, InitiateResponse, RecvRequest, RecvResponse, SendRequest, SendResponse,
 };
@@ -107,10 +110,10 @@ where
         );
         let response = match result {
             Ok(_) => SendResponse {
-                event: Some(network::send_response::Event::Success(network::Success {})),
+                event: Some(send_response::Event::Success(send_response::Success {})),
             },
             Err(e) => SendResponse {
-                event: Some(network::send_response::Event::Error(network::Error {
+                event: Some(send_response::Event::Error(network::Error {
                     description: format!("{:?}", e),
                 })),
             },
@@ -120,34 +123,62 @@ where
 
     async fn recv(
         &self,
-        _request: Request<RecvRequest>,
+        request: Request<RecvRequest>,
     ) -> Result<Response<Self::RecvStream>, Status> {
         info!("recv ...");
-        let (_tx, rx) = mpsc::channel(1);
+        let (tx, rx) = mpsc::channel(1);
+        let cloned = Arc::clone(&self.app);
+        let hex = request.get_ref().public_key.clone();
+        let public_key: PublicKey<Ed25519> = PublicKey::from_str(&hex)
+            .map_err(|e| Status::invalid_argument(format!("public_key is invalid: {:?}", e)))?;
+        tokio::spawn(async move {
+            create_recv_response(cloned, tx, public_key).await;
+        });
         Ok(Response::<Self::RecvStream>::new(rx))
     }
 }
 
-fn already_connected() -> Event {
-    Event::AlreadyConnected(AlreadyConnected {
+fn already_connected() -> initiate_response::Event {
+    initiate_response::Event::AlreadyConnected(AlreadyConnected {
         public_key: "".to_string(),
     })
 }
-fn disconnected() -> Event {
-    Event::Disconnected(Disconnected {
+fn disconnected() -> initiate_response::Event {
+    initiate_response::Event::Disconnected(Disconnected {
         public_key: "".to_string(),
     })
 }
-fn connected() -> Event {
-    Event::Connected(Connected {
+fn connected() -> initiate_response::Event {
+    initiate_response::Event::Connected(Connected {
         public_key: "".to_string(),
+    })
+}
+fn error(e: Error) -> recv_response::Event {
+    recv_response::Event::Error(network::Error {
+        description: format!("{:?}", e),
     })
 }
 
-async fn response(mut tx: Sender<Result<InitiateResponse, Status>>, e: Event) {
-    tx.send(Ok(InitiateResponse { event: Some(e) })).await;
+fn success(public_key: PublicKey<Ed25519>, m: Message) -> recv_response::Event {
+    recv_response::Event::Success(recv_response::Success {
+        remote_public_key: public_key.to_string(),
+        data: hex::encode(m.to_bytes()),
+    })
 }
 
+async fn response(mut tx: Sender<Result<InitiateResponse, Status>>, e: initiate_response::Event) {
+    match tx.send(Ok(InitiateResponse { event: Some(e) })).await {
+        Ok(_) => {}
+        Err(e) => warn!("can not send message: {:?}", e),
+    }
+}
+
+async fn recv_response(mut tx: Sender<Result<RecvResponse, Status>>, e: recv_response::Event) {
+    match tx.send(Ok(RecvResponse { event: Some(e) })).await {
+        Ok(_) => {}
+        Err(e) => warn!("can not send message: {:?}", e),
+    }
+}
 async fn create_initiate_response<A>(
     app: Arc<RwLock<A>>,
     tx: Sender<Result<InitiateResponse, Status>>,
@@ -184,5 +215,26 @@ async fn create_initiate_response<A>(
         Err(_) => {
             response(tx.clone(), disconnected()).await;
         }
+    }
+}
+
+async fn create_recv_response<A>(
+    app: Arc<RwLock<A>>,
+    tx: Sender<Result<RecvResponse, Status>>,
+    public_key: PublicKey<Ed25519>,
+) where
+    A: Application + 'static + Send + Sync,
+{
+    let (peer_tx, mut peer_rx) = mpsc::channel::<Message>(1);
+    let message = Message::RequestSubscribe(peer_tx.clone());
+    match send_to_peer(Arc::clone(&app), message, &public_key.clone()) {
+        Ok(()) => (),
+        Err(e) => {
+            recv_response(tx.clone(), error(e)).await;
+            return;
+        }
+    }
+    while let Some(m) = peer_rx.recv().await {
+        recv_response(tx.clone(), success(public_key.clone(), m)).await;
     }
 }
