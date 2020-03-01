@@ -88,9 +88,7 @@ where
             .expect("cannot parse address");
 
         let cloned = Arc::clone(&self.app);
-        info!("app cloned ...");
         tokio::spawn(async move {
-            info!("spawned ...");
             create_initiate_response(cloned, tx, addr).await;
         });
         Ok(Response::<Self::InitiateStream>::new(rx))
@@ -147,8 +145,7 @@ fn connected() -> Event {
 }
 
 async fn response(mut tx: Sender<Result<InitiateResponse, Status>>, e: Event) {
-    let res = tx.send(Ok(InitiateResponse { event: Some(e) })).await;
-    info!("result: {:?}", res)
+    tx.send(Ok(InitiateResponse { event: Some(e) })).await;
 }
 
 async fn create_initiate_response<A>(
@@ -158,7 +155,6 @@ async fn create_initiate_response<A>(
 ) where
     A: Application + 'static + Send + Sync,
 {
-    debug!("create_initiate_response ...");
     let peer = match add_peer(Arc::clone(&app), addr) {
         Ok(peer) => peer,
         Err(Error::PeerAlreadyConnected) => {
@@ -174,7 +170,6 @@ async fn create_initiate_response<A>(
         let app = guard_app.deref();
         app.private_key()
     };
-    debug!("create_initiate_response connecting ...");
     let client = match Client::connect(peer.addr, key).await {
         Ok(client) => client,
         Err(_) => {
@@ -182,10 +177,8 @@ async fn create_initiate_response<A>(
             return;
         }
     };
-    debug!("create_initiate_response connected ...");
     match add_connection(Arc::clone(&app), client) {
         Ok(_) => {
-            // schedule_ping(Arc::clone(&app), peer.addr);
             response(tx.clone(), connected()).await;
         }
         Err(_) => {

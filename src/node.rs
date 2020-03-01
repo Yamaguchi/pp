@@ -19,7 +19,6 @@ use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::mpsc::Sender;
 use tokio::time;
 
-// #[derive(Clone)]
 pub struct Node {
     peers: HashMap<SocketAddr, Peer>,
     message_handlers: HashMap<PublicKey<Ed25519>, Sender<Message>>,
@@ -42,11 +41,9 @@ impl Node {
         let mut tx = recv_tx.clone();
         connection.relayer = Some(Arc::new(Mutex::new(send_rx)));
         let key = connection.remote_static_key();
-        info!("remote static key is {:?}", key);
         self.message_handlers.insert(key.unwrap(), recv_tx.clone());
 
         tokio::spawn(async move {
-            // loop {
             let mut buffer = vec![];
             while let Some(result) = connection.next().await {
                 match result {
@@ -101,6 +98,7 @@ impl Node {
         self.peers.insert(addr, peer.clone());
         Ok(peer)
     }
+
     fn send_to_peer(&mut self, message: Message, key: &PublicKey<Ed25519>) -> Result<(), Error> {
         let cloned_key = key.clone();
         let mut handler = self.message_handlers[key].clone();
