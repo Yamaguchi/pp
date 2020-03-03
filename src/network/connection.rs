@@ -41,11 +41,12 @@ impl ConnectionImpl {
             relayer: None,
         }
     }
-    pub fn remote_static_key<T>(&self) -> Option<PublicKey<T>> {
-        match &self.transport {
-            Some(t) => Some(PublicKey::new(t.get_remote_static().unwrap())),
-            None => None,
-        }
+    pub fn remote_static_key<T>(&self) -> Result<PublicKey<T>, Error> {
+        let transport = self.transport.as_ref().ok_or(Error::AuthenticationFailed)?;
+        let key = transport
+            .get_remote_static()
+            .ok_or(Error::AuthenticationFailed)?;
+        Ok(PublicKey::new(key))
     }
 }
 
@@ -57,7 +58,10 @@ impl Connection for ConnectionImpl {
             self.stream.peer_addr(),
             hex::encode(buf)
         );
-        self.stream.write(buf).await.unwrap();
+        self.stream
+            .write(buf)
+            .await
+            .map_err(|e| Error::CannotWrite(e))?;
         Ok(())
     }
     async fn read(&mut self) -> Result<Vec<u8>, Error> {
@@ -66,7 +70,7 @@ impl Connection for ConnectionImpl {
             .stream
             .read(&mut buf)
             .await
-            .map_err(|_| Error::CannotRead)?;
+            .map_err(|e| Error::CannotRead(e))?;
         trace!(
             "[{:?}]: read {:?}",
             self.stream.peer_addr(),
@@ -75,9 +79,12 @@ impl Connection for ConnectionImpl {
         Ok(Vec::from(&buf[..n]))
     }
     async fn send_message(&mut self, message: Message) -> Result<(), Error> {
-        let mut t = self.transport.as_mut().unwrap();
+        let mut t = self.transport.as_mut().ok_or(Error::AuthenticationFailed)?;
         let buf = Transporter::write_message(&mut t, message.clone())?;
-        self.stream.write(&buf[..]).await.unwrap();
+        self.stream
+            .write(&buf[..])
+            .await
+            .map_err(|e| Error::CannotWrite(e))?;
         trace!(
             "[{:?}]: send_message: {:?}, {:?}",
             self.stream.peer_addr(),
@@ -96,9 +103,9 @@ impl Connection for ConnectionImpl {
             .stream
             .read(&mut read_buffer)
             .await
-            .map_err(|_| Error::CannotRead)?;
+            .map_err(|e| Error::CannotRead(e))?;
         let vec: Vec<u8> = rest.iter().chain(&read_buffer[0..n]).map(|&b| b).collect();
-        let mut t = self.transport.as_mut().unwrap();
+        let mut t = self.transport.as_mut().ok_or(Error::AuthenticationFailed)?;
         let (message, rest) = Transporter::read_message(&mut t, &vec[0..rest.len() + n])?;
         trace!(
             "[{:?}]: receive_message: {:?}, {:?}",
@@ -123,8 +130,13 @@ impl Stream for ConnectionImpl {
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         // First poll the `UnboundedReceiver`.
-        let arc = Arc::clone(&self.relayer.as_ref().unwrap());
-        let mut guard = arc.lock().unwrap();
+        let arc = Arc::clone(self.relayer.as_ref().ok_or(Error::CannotGetLock)?);
+        let mut guard = match arc.lock() {
+            Ok(lock) => lock,
+            Err(_) => {
+                return Poll::Ready(Some(Err(Error::CannotGetLock)));
+            }
+        };
         let mut sender = guard.deref_mut();
         if let Poll::Ready(Some(v)) = Pin::new(&mut sender).poll_next(cx) {
             return Poll::Ready(Some(Ok(Actions::Send(v))));
@@ -137,7 +149,7 @@ impl Stream for ConnectionImpl {
         match result {
             Ok(0) => Poll::Pending,
             Ok(_) => Poll::Ready(Some(Ok(Actions::Receive))),
-            Err(_) => Poll::Ready(Some(Err(Error::CannotRead))),
+            Err(e) => Poll::Ready(Some(Err(Error::CannotRead(e)))),
         }
     }
 }

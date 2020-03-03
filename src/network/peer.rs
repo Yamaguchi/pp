@@ -1,4 +1,5 @@
 use crate::crypto::curves::Ed25519;
+use crate::errors::Error;
 use crate::key::PublicKey;
 use crate::message::Message;
 use std::net::SocketAddr;
@@ -23,16 +24,22 @@ impl Peer {
         }
     }
 
-    pub async fn handle_message(&mut self, m: Message, tx: UnboundedSender<Message>) {
+    pub async fn handle_message(
+        &mut self,
+        m: Message,
+        tx: UnboundedSender<Message>,
+    ) -> Result<(), Error> {
         info!("handle_message: {:?}", m);
         match m.clone() {
             Message::RequestPing => {
                 let ping = Message::build_ping();
-                tx.send(ping).ok();
+                tx.send(ping)
+                    .map_err(|_| Error::CannotHandleMessage(m.clone()))?;
             }
             Message::Ping(nonce) => {
                 let pong = Message::Pong(nonce);
-                tx.send(pong).ok();
+                tx.send(pong)
+                    .map_err(|_| Error::CannotHandleMessage(m.clone()))?;
             }
             Message::Pong(_) => {
                 // Do nothing.
@@ -42,21 +49,21 @@ impl Peer {
             }
             Message::RequestData(data) => {
                 let data = Message::Data(data);
-                tx.send(data).ok();
+                tx.send(data)
+                    .map_err(|_| Error::CannotHandleMessage(m.clone()))?;
             }
             Message::RequestSubscribe(sender) => self.broadcaster = Some(sender),
         }
         let broadcaster = self.broadcaster.clone();
         if let Some(mut broadcaster) = broadcaster {
             if m.is_p2p() {
-                match broadcaster.send(m).await {
-                    Ok(_) => {}
-                    Err(e) => {
-                        warn!("cannot send message: {:?}", e);
-                    }
-                }
+                broadcaster
+                    .send(m.clone())
+                    .await
+                    .map_err(|_| Error::CannotHandleMessage(m.clone()))?;
             }
         }
+        Ok(())
     }
 }
 

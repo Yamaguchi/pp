@@ -40,9 +40,9 @@ impl Node {
         let (recv_tx, mut recv_rx) = channel::<Message>(1);
         let mut tx = recv_tx.clone();
         connection.relayer = Some(Arc::new(Mutex::new(send_rx)));
-        let key = connection.remote_static_key();
-        info!("connection is established: {:?}", key.clone().unwrap());
-        self.message_handlers.insert(key.unwrap(), recv_tx.clone());
+        let key = connection.remote_static_key()?;
+        info!("connection is established: {:?}", key);
+        self.message_handlers.insert(key, recv_tx.clone());
         let addr = connection
             .stream
             .peer_addr()
@@ -53,21 +53,25 @@ impl Node {
             while let Some(result) = connection.next().await {
                 match result {
                     Ok(action) => match action {
-                        Actions::Send(m) => {
-                            connection.send_message(m).await.unwrap();
-                        }
+                        Actions::Send(m) => match connection.send_message(m).await {
+                            Ok(_) => {}
+                            Err(e) => error!("failed to send message {:?}", e),
+                        },
                         Actions::Receive => {
                             let recv = connection.receive_message(&mut buffer).await;
                             match recv {
                                 Ok((Some(m), rest)) => {
                                     buffer = rest;
-                                    tx.send(m.clone()).await.ok();
+                                    match tx.send(m.clone()).await {
+                                        Ok(_) => {}
+                                        Err(e) => error!("failed to recv message {:?}", e),
+                                    }
                                 }
                                 Ok((None, rest)) => {
                                     buffer = rest;
                                 }
                                 Err(e) => {
-                                    error!("{:?}", e);
+                                    error!("failed to recv message {:?}", e);
                                 }
                             }
                         }
@@ -82,13 +86,23 @@ impl Node {
             loop {
                 interval.tick().await;
                 info!("send Message::RequestPing");
-                tx.send(Message::RequestPing).await.ok();
+                match tx.send(Message::RequestPing).await {
+                    Ok(_) => {}
+                    Err(e) => {
+                        warn!("failed to send ping: {:?}", e);
+                    }
+                }
             }
         });
         let mut peer = self.peers[&addr].clone();
         tokio::spawn(async move {
             while let Some(m) = recv_rx.recv().await {
-                peer.handle_message(m, send_tx.clone()).await;
+                match peer.handle_message(m, send_tx.clone()).await {
+                    Ok(_) => {}
+                    Err(e) => {
+                        error!("Could not handle message: {:?}", e);
+                    }
+                }
             }
         });
 
@@ -127,9 +141,9 @@ pub fn send_to_peer<A>(
 where
     A: Application + 'static + Send + Sync,
 {
-    let guard_app = app.read().unwrap();
+    let guard_app = app.read().map_err(|_| Error::CannotGetLock)?;
     let app = guard_app.deref();
-    let mut guard_node = app.node().ok().unwrap();
+    let mut guard_node = app.node().map_err(|_| Error::CannotGetLock)?;
     let node = guard_node.deref_mut();
     node.send_to_peer(message, key)
 }
@@ -138,9 +152,9 @@ pub fn add_peer<A>(app: Arc<RwLock<A>>, addr: SocketAddr) -> Result<Peer, Error>
 where
     A: Application + 'static + Send + Sync,
 {
-    let guard_app = app.read().unwrap();
+    let guard_app = app.read().map_err(|_| Error::CannotGetLock)?;
     let app = guard_app.deref();
-    let mut guard_node = app.node().ok().unwrap();
+    let mut guard_node = app.node().map_err(|_| Error::CannotGetLock)?;
     let node = guard_node.deref_mut();
     node.add_peer(addr)
 }
@@ -149,9 +163,9 @@ pub fn add_connection<A>(app: Arc<RwLock<A>>, conn: ConnectionImpl) -> Result<()
 where
     A: Application + 'static + Send + Sync,
 {
-    let guard_app = app.read().unwrap();
+    let guard_app = app.read().map_err(|_| Error::CannotGetLock)?;
     let app = guard_app.deref();
-    let mut guard_node = app.node().ok().unwrap();
+    let mut guard_node = app.node().map_err(|_| Error::CannotGetLock)?;
     let node = guard_node.deref_mut();
     let _ = node.add_connection(conn);
     Ok(())

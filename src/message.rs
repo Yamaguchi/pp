@@ -61,14 +61,20 @@ impl Message {
 
     pub fn parse(buffer: &[u8]) -> Result<Message, Error> {
         let (mut type_buf, mut body_buf) = buffer.split_at(2);
-        let type_id = type_buf.read_u16::<NetworkEndian>().unwrap();
+        let type_id = type_buf
+            .read_u16::<NetworkEndian>()
+            .map_err(|e| Error::CannotRead(e))?;
         let message = match type_id {
             0x01 => {
-                let nonce = body_buf.read_u32::<NetworkEndian>().unwrap();
+                let nonce = body_buf
+                    .read_u32::<NetworkEndian>()
+                    .map_err(|e| Error::CannotRead(e))?;
                 Message::Ping(nonce)
             }
             0x02 => {
-                let nonce = body_buf.read_u32::<NetworkEndian>().unwrap();
+                let nonce = body_buf
+                    .read_u32::<NetworkEndian>()
+                    .map_err(|e| Error::CannotRead(e))?;
                 Message::Pong(nonce)
             }
             0x03 => {

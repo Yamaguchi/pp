@@ -197,7 +197,13 @@ async fn create_initiate_response<A>(
         }
     };
     let key = {
-        let guard_app = app.read().unwrap();
+        let guard_app = match app.read() {
+            Ok(lock) => lock,
+            Err(e) => {
+                error!("can not get lock {:?}", e);
+                return;
+            }
+        };
         let app = guard_app.deref();
         app.private_key()
     };

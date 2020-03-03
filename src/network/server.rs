@@ -32,18 +32,20 @@ where
             configuration: configuration,
         }
     }
-    async fn accept_loop(&mut self, addr: String) -> Result<(), std::io::Error> {
+    async fn accept_loop(&mut self, addr: String) -> Result<(), Error> {
         info!("listening... {}", addr);
-        let mut listener = TcpListener::bind(addr).await?;
+        let mut listener = TcpListener::bind(addr)
+            .await
+            .map_err(|e| Error::CannotBind(e))?;
         let mut incoming = listener.incoming();
 
         let key = {
-            let guard_app = self.app.read().unwrap();
+            let guard_app = self.app.read().map_err(|_| Error::CannotGetLock)?;
             let app = guard_app.deref();
             app.private_key()
         };
         while let Some(stream) = incoming.next().await {
-            let stream = stream?;
+            let stream = stream.map_err(|_| Error::CannotConnectPeer)?;
             match self
                 .accept(Arc::clone(&self.app), stream, key.clone())
                 .await

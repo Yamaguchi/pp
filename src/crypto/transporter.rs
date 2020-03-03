@@ -22,7 +22,9 @@ impl Transporter {
             .read_message(&buffer[0..18], &mut decrypted)
             .map_err(|e| Error::TransportError(e))?;
         let mut c = Cursor::new(&decrypted);
-        let body_len: u16 = c.read_u16::<NetworkEndian>().unwrap();
+        let body_len: u16 = c
+            .read_u16::<NetworkEndian>()
+            .map_err(|e| Error::CannotRead(e))?;
         let len: usize = (2 + 16 + body_len + 16) as usize;
         if buffer.len() < len {
             rest.copy_from_slice(buffer);
@@ -44,16 +46,18 @@ impl Transporter {
         let mut len_buf = vec![];
         len_buf
             .write_u16::<NetworkEndian>(payload.len() as u16)
-            .unwrap();
+            .map_err(|e| Error::CannotWrite(e))?;
         let len_len = state
             .write_message(&len_buf[..], &mut enc_len[..])
             .map_err(|e| Error::TransportError(e))?;
-        buf.write(&enc_len[..len_len]).unwrap();
+        buf.write(&enc_len[..len_len])
+            .map_err(|e| Error::CannotWrite(e))?;
         let mut enc_payload = [0u8; 65535];
         let len_payload = state
             .write_message(&payload, &mut enc_payload[..])
             .map_err(|e| Error::TransportError(e))?;
-        buf.write(&enc_payload[..len_payload]).unwrap();
+        buf.write(&enc_payload[..len_payload])
+            .map_err(|e| Error::CannotWrite(e))?;
         Ok(buf)
     }
 }
