@@ -1,4 +1,5 @@
 use crate::application::Application;
+use crate::configuration;
 use crate::crypto::curves::Ed25519;
 use crate::errors::Error;
 use crate::key::PublicKey;
@@ -26,22 +27,26 @@ where
     A: Application + 'static + Send + Sync,
 {
     app: Arc<RwLock<A>>,
-    address: String,
+    config: configuration::gRPC,
 }
 
 impl<A> GrpcServer<A>
 where
     A: Application + 'static + Send + Sync,
 {
-    pub fn new(app: Arc<RwLock<A>>, address: String) -> Self {
+    pub fn new(app: Arc<RwLock<A>>, config: configuration::gRPC) -> Self {
         GrpcServer::<A> {
             app: app,
-            address: address,
+            config: config,
         }
     }
 
     pub async fn start(&self) {
-        let addr: SocketAddr = self.address.parse().unwrap();
+        let addr: SocketAddr = self
+            .config
+            .bind
+            .parse()
+            .expect(&format!("Could not parse address: {:?}", self.config.bind));
 
         let app = Arc::clone(&self.app);
         tokio::spawn(async move {

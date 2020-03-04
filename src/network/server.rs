@@ -1,5 +1,5 @@
 use crate::application::Application;
-use crate::configuration::ServerConfiguration;
+use crate::configuration;
 use crate::crypto::curves::Ed25519;
 use crate::errors::Error;
 use crate::key::PrivateKey;
@@ -19,17 +19,17 @@ where
     A: Application + 'static + Send + Sync,
 {
     app: Arc<RwLock<A>>,
-    pub configuration: ServerConfiguration,
+    pub config: configuration::Server,
 }
 
 impl<A> Server<A>
 where
     A: Application + 'static + Send + Sync,
 {
-    pub fn new(app: Arc<RwLock<A>>, configuration: ServerConfiguration) -> Self {
+    pub fn new(app: Arc<RwLock<A>>, config: configuration::Server) -> Self {
         Server::<A> {
             app: app,
-            configuration: configuration,
+            config: config,
         }
     }
     async fn accept_loop(&mut self, addr: String) -> Result<(), Error> {
@@ -58,7 +58,7 @@ where
     }
     pub async fn start(&mut self) {
         info!("Start ...");
-        let result = self.accept_loop(self.configuration.address.clone()).await;
+        let result = self.accept_loop(self.config.bind.clone()).await;
         info!("End ... {:?}", result);
     }
     async fn accept(

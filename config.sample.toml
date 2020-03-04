@@ -1,0 +1,10 @@
+[application]
+private_key = "649293486b0d3af1f90243021453dcb7dbbbd9fd3a54c373eaca02d230aa3154"
+
+[server]
+bind = "[::1]:3000"
+
+[grpc]
+bind = "[::1]:50000"
+
+

@@ -8,6 +8,7 @@ pub enum Error {
     CannotRead(std::io::Error),
     CannotWrite(std::io::Error),
     CannotBind(std::io::Error),
+    CannnotParseConfigFile(toml::de::Error),
     CannotGetLock,
     AuthenticationFailed,
     TransportError(snow::error::Error),

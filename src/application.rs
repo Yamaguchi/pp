@@ -1,3 +1,4 @@
+use crate::configuration;
 use crate::crypto::curves::Ed25519;
 use crate::errors::Error;
 use crate::key::PrivateKey;
@@ -24,11 +25,26 @@ impl Application for NetworkApplication {
 }
 
 impl NetworkApplication {
-    pub fn new() -> Self {
-        let random_bytes: Vec<u8> = (0..32).map(|_| rand::random::<u8>()).collect();
+    pub fn new(config: configuration::Application) -> Self {
         NetworkApplication {
             node: Arc::new(Mutex::new(Node::new())),
-            private_key: PrivateKey::<Ed25519>::new(&random_bytes),
+            private_key: PrivateKey::<Ed25519>::new(
+                &hex::decode(config.private_key).expect("cannot decode private key"),
+            ),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_new() {
+        let config = configuration::Configuration::new("./config.sample.toml".to_string()).unwrap();
+        let app = NetworkApplication::new(config.application);
+        assert_eq!(
+            app.private_key().to_string(),
+            "649293486b0d3af1f90243021453dcb7dbbbd9fd3a54c373eaca02d230aa3154"
+        );
     }
 }
