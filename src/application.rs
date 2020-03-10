@@ -27,7 +27,7 @@ impl Application for NetworkApplication {
 impl NetworkApplication {
     pub fn new(config: configuration::Application) -> Self {
         NetworkApplication {
-            node: Arc::new(Mutex::new(Node::new())),
+            node: Arc::new(Mutex::new(Node::new(config.clone()))),
             private_key: PrivateKey::<Ed25519>::new(
                 &hex::decode(config.private_key).expect("cannot decode private key"),
             ),

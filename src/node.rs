@@ -1,4 +1,5 @@
 use crate::application::Application;
+use crate::configuration;
 use crate::crypto::curves::Ed25519;
 use crate::errors::Error;
 use crate::key::PublicKey;
@@ -22,13 +23,15 @@ use tokio::time;
 pub struct Node {
     peers: HashMap<SocketAddr, Peer>,
     message_handlers: HashMap<PublicKey<Ed25519>, Sender<Message>>,
+    config: configuration::Application,
 }
 
 impl Node {
-    pub fn new() -> Self {
+    pub fn new(config: configuration::Application) -> Self {
         Node {
             peers: HashMap::<SocketAddr, Peer>::new(),
             message_handlers: HashMap::<PublicKey<Ed25519>, Sender<Message>>::new(),
+            config: config,
         }
     }
 
@@ -80,20 +83,9 @@ impl Node {
                 }
             }
         });
-        let mut tx = recv_tx.clone();
-        tokio::spawn(async move {
-            let mut interval = time::interval(Duration::from_secs(60));
-            loop {
-                interval.tick().await;
-                info!("send Message::RequestPing");
-                match tx.send(Message::RequestPing).await {
-                    Ok(_) => {}
-                    Err(e) => {
-                        warn!("failed to send ping: {:?}", e);
-                    }
-                }
-            }
-        });
+
+        self.start_ping_thread(recv_tx.clone());
+
         let mut peer = self.peers[&addr].clone();
         tokio::spawn(async move {
             while let Some(m) = recv_rx.recv().await {
@@ -130,6 +122,25 @@ impl Node {
             }
         });
         Ok(())
+    }
+
+    fn start_ping_thread(&mut self, mut tx: Sender<Message>) {
+        let interval = self.config.ping_interval;
+        if interval > 0 {
+            tokio::spawn(async move {
+                let mut interval = time::interval(Duration::from_secs(interval));
+                loop {
+                    interval.tick().await;
+                    info!("send Message::RequestPing");
+                    match tx.send(Message::RequestPing).await {
+                        Ok(_) => {}
+                        Err(e) => {
+                            warn!("failed to send ping: {:?}", e);
+                        }
+                    }
+                }
+            });
+        }
     }
 }
 

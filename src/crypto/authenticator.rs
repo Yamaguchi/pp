@@ -89,9 +89,8 @@ impl Authenticator {
             let _ = connection.write(&mut buf[0..len]).await;
         }
 
-        Ok(handshake.into_transport_mode().map_err(|e| {
-            error!("{}", e);
-            Error::AuthenticationFailed
-        })?)
+        Ok(handshake
+            .into_transport_mode()
+            .map_err(|_| Error::AuthenticationFailed)?)
     }
 }
