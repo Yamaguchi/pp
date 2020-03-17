@@ -8,4 +8,5 @@ bind = "[::1]:3000"
 [grpc]
 bind = "[::1]:50000"
 
-
+[network]
+connect_to = []

@@ -3,12 +3,14 @@ use crate::errors::Error;
 use std::fs::File;
 use std::io::BufReader;
 use std::io::Read;
+use std::net::SocketAddr;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Configuration {
     pub application: Application,
     pub grpc: gRPC,
     pub server: Server,
+    pub network: Network,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -25,6 +27,11 @@ pub struct gRPC {
 #[derive(Debug, Deserialize, Clone)]
 pub struct Server {
     pub bind: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct Network {
+    pub connect_to: Vec<SocketAddr>,
 }
 
 impl Configuration {

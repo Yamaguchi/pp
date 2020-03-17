@@ -1,6 +1,7 @@
 use crate::application::NetworkApplication;
 use crate::configuration::*;
 use crate::grpc::GrpcServer;
+use crate::network::manager::Manager;
 use crate::network::server::Server;
 use std::env;
 use std::sync::Arc;
@@ -35,6 +36,9 @@ async fn main() {
     let cloned = Arc::clone(&app);
     let rpc = GrpcServer::new(cloned, config.grpc);
     rpc.start().await;
+
+    let cloned = Arc::clone(&app);
+    Manager::start(cloned, config.network);
 
     let cloned = Arc::clone(&app);
     let mut server = Server::new(cloned, config.server);

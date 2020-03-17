@@ -61,6 +61,7 @@ where
         let result = self.accept_loop(self.config.bind.clone()).await;
         info!("End ... {:?}", result);
     }
+
     async fn accept(
         &self,
         app: Arc<RwLock<A>>,

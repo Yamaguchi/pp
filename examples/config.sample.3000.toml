@@ -1,0 +1,18 @@
+[application]
+private_key = "7be42b204c00d965c891848c06180f504dbf0e26f8bbae647d8bf366dacea17a"
+ping_interval = 60
+
+[server]
+bind = "[::1]:3000"
+
+[grpc]
+bind = "[::1]:50000"
+
+[network]
+connect_to = [
+    "[::1]:3001",
+    "[::1]:3002",
+    "[::1]:3003",
+    "[::1]:3004"
+]
+
