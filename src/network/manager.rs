@@ -25,20 +25,16 @@ impl Manager {
     }
     /// errors:
     ///     Error::PeerAlreadyConnected
-    ///     errors::Error::
+    ///     Error::CannotConnectPeer
+    ///     Error::AuthenticationFailed
+    ///     Error::CannotGetLock
     async fn connect<A>(app: Arc<RwLock<A>>, addr: SocketAddr) -> Result<(), Error>
     where
         A: Application + 'static + Send + Sync,
     {
         let peer = add_peer(Arc::clone(&app), addr)?;
         let key = {
-            let guard_app = match app.read() {
-                Ok(lock) => lock,
-                Err(e) => {
-                    error!("can not get lock {:?}", e);
-                    return Ok(());
-                }
-            };
+            let guard_app = match app.read().map_err(|_| Error::CannotGetLock)?;
             let app = guard_app.deref();
             app.private_key()
         };
