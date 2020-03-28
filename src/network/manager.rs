@@ -20,7 +20,7 @@ impl Manager {
             // wait 60 secs, so that peers can start completely.
             let mut interval = time::interval(Duration::from_secs(60));
             interval.tick().await;
-            Manager::connect_on_launch(app, config).await;
+            let _ = Manager::connect_on_launch(app, config).await;
         });
     }
     /// errors:
@@ -34,7 +34,7 @@ impl Manager {
     {
         let peer = add_peer(Arc::clone(&app), addr)?;
         let key = {
-            let guard_app = match app.read().map_err(|_| Error::CannotGetLock)?;
+            let guard_app = app.read().map_err(|_| Error::CannotGetLock)?;
             let app = guard_app.deref();
             app.private_key()
         };
@@ -51,7 +51,7 @@ impl Manager {
     {
         for addr in config.connect_to {
             let cloned = Arc::clone(&app);
-            Manager::connect(cloned, addr).await;
+            Manager::connect(cloned, addr).await?;
         }
         Ok(())
     }
