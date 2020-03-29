@@ -53,6 +53,9 @@ impl Peer {
                     .map_err(|_| Error::CannotHandleMessage(m.clone()))?;
             }
             Message::RequestSubscribe(sender) => self.broadcaster = Some(sender),
+            Message::Disconnect => {
+                // Do nothing.
+            }
         }
         let broadcaster = self.broadcaster.clone();
         if let Some(mut broadcaster) = broadcaster {

@@ -1,10 +1,9 @@
 use crate::crypto::curves::Ed25519;
 use crate::errors::Error;
 use crate::key::PublicKey;
-use std::any::Any;
 use std::collections::HashMap;
 use std::hash::Hash;
-use std::marker::PhantomData;
+use std::net::SocketAddr;
 use std::sync::mpsc::channel;
 use std::sync::mpsc::{Receiver, Sender};
 
@@ -50,17 +49,17 @@ pub enum EventType {
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Event {
-    Connected(i32),
-    Authenticated(u32),
-    Disconnected(u32),
+    Connected(SocketAddr),
+    Authenticated(PublicKey<Ed25519>),
+    Disconnected(SocketAddr),
 }
 
 impl Event {
     fn to_type(&self) -> EventType {
         match self {
-            Connected => EventType::Connected,
-            Authenticated => EventType::Authenticated,
-            Disconnected => EventType::Disconnected,
+            Event::Connected(_) => EventType::Connected,
+            Event::Authenticated(_) => EventType::Authenticated,
+            Event::Disconnected(_) => EventType::Disconnected,
         }
     }
 }
@@ -71,7 +70,7 @@ mod tests {
     fn test_subscribe_and_broadcast() {
         let mut m = EventManager::new();
         if let Ok(rx) = m.subscribe(EventType::Connected) {
-            let e = Event::Connected(1);
+            let e = Event::Connected("[::1]:1000".parse().unwrap());
             m.broadcast(e.clone());
             assert_eq!(e, rx.recv().unwrap());
         } else {

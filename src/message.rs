@@ -12,6 +12,7 @@ pub enum Message {
     Ping(u32),
     Pong(u32),
     Data(Vec<u8>),
+    Disconnect,
 }
 
 impl Message {
@@ -45,6 +46,7 @@ impl Message {
             Message::RequestPing => 0x11,
             Message::RequestData(_) => 0x12,
             Message::RequestSubscribe(_) => 0x13,
+            Message::Disconnect => 0xff,
         }
     }
 
@@ -56,6 +58,7 @@ impl Message {
             Message::RequestPing => false,
             Message::RequestData(_) => false,
             Message::RequestSubscribe(_) => false,
+            Message::Disconnect => false,
         }
     }
 
@@ -86,7 +89,7 @@ impl Message {
                 let data = Vec::from(body_buf);
                 Message::RequestData(data)
             }
-            0x13 => return Err(Error::UnsupportedOperation),
+            0x13 | 0xff => return Err(Error::UnsupportedOperation),
             _ => return Err(Error::UnknownMessage),
         };
         Ok(message)

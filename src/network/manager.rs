@@ -1,10 +1,12 @@
 use crate::application::Application;
 use crate::configuration;
 use crate::errors::Error;
+use crate::event::{Event, EventType};
 use crate::network::client::Client;
-use crate::node::{add_connection, add_peer};
+use crate::node::{add_connection, add_peer, remove_connection};
 use std::net::SocketAddr;
 use std::ops::Deref;
+use std::ops::DerefMut;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use tokio::time;
@@ -16,6 +18,8 @@ impl Manager {
     where
         A: Application + 'static + Send + Sync,
     {
+        Self::init_event(Arc::clone(&app));
+
         tokio::spawn(async move {
             // wait 60 secs, so that peers can start completely.
             let mut interval = time::interval(Duration::from_secs(60));
@@ -23,6 +27,24 @@ impl Manager {
             let _ = Manager::connect_on_launch(app, config).await;
         });
     }
+
+    fn init_event<A>(app: Arc<RwLock<A>>)
+    where
+        A: Application + 'static + Send + Sync,
+    {
+        let guard_app = app.read().unwrap();
+        let app_ref = guard_app.deref();
+        let mut guard_event = app_ref.event_manager().unwrap();
+        let event_manager = guard_event.deref_mut();
+        let rx = event_manager.subscribe(EventType::Disconnected).unwrap();
+        match rx.recv() {
+            Ok(Event::Disconnected(addr)) => {
+                Self::reconnect(Arc::clone(&app), addr);
+            }
+            _ => {}
+        }
+    }
+
     /// errors:
     ///     Error::PeerAlreadyConnected
     ///     Error::CannotConnectPeer
@@ -42,6 +64,7 @@ impl Manager {
         add_connection(Arc::clone(&app), client)?;
         Ok(())
     }
+
     async fn connect_on_launch<A>(
         app: Arc<RwLock<A>>,
         config: configuration::Network,
@@ -54,5 +77,22 @@ impl Manager {
             Manager::connect(cloned, addr).await?;
         }
         Ok(())
+    }
+
+    fn disconnect<A>(app: Arc<RwLock<A>>, addr: SocketAddr)
+    where
+        A: Application + 'static + Send + Sync,
+    {
+        remove_connection(Arc::clone(&app), addr).ok();
+    }
+
+    fn reconnect<A>(app: Arc<RwLock<A>>, addr: SocketAddr)
+    where
+        A: Application + 'static + Send + Sync,
+    {
+        Self::disconnect(Arc::clone(&app), addr);
+        tokio::spawn(async move {
+            Self::connect(Arc::clone(&app), addr).await.ok();
+        });
     }
 }

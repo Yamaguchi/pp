@@ -9,6 +9,7 @@ use crate::network::connection::Connection;
 use crate::network::connection::ConnectionImpl;
 use crate::network::peer::Peer;
 use std::collections::HashMap;
+use std::net::Shutdown;
 use std::net::SocketAddr;
 use std::ops::Deref;
 use std::ops::DerefMut;
@@ -22,6 +23,7 @@ use tokio::time;
 
 pub struct Node {
     peers: HashMap<SocketAddr, Peer>,
+    connections: HashMap<SocketAddr, ConnectionImpl>,
     message_handlers: HashMap<PublicKey<Ed25519>, Sender<Message>>,
     config: configuration::Application,
 }
@@ -30,9 +32,18 @@ impl Node {
     pub fn new(config: configuration::Application) -> Self {
         Node {
             peers: HashMap::<SocketAddr, Peer>::new(),
+            connections: HashMap::<SocketAddr, ConnectionImpl>::new(),
             message_handlers: HashMap::<PublicKey<Ed25519>, Sender<Message>>::new(),
             config: config,
         }
+    }
+
+    pub fn remove_connection(&mut self, addr: SocketAddr) -> Result<(), Error> {
+        let peer = self.peers[&addr].clone();
+        let key = peer.public_key.unwrap();
+        self.message_handlers.remove(&key);
+        self.peers.remove(&addr);
+        Ok(())
     }
 
     pub fn add_connection(&mut self, mut connection: ConnectionImpl) -> Result<(), Error> {
@@ -50,12 +61,19 @@ impl Node {
             .stream
             .peer_addr()
             .map_err(|_| Error::CannotConnectPeer)?;
+        // self.connections.insert(addr, connection);
 
         tokio::spawn(async move {
             let mut buffer = vec![];
             while let Some(result) = connection.next().await {
                 match result {
                     Ok(action) => match action {
+                        Actions::Send(Message::Disconnect) => {
+                            match connection.stream.shutdown(Shutdown::Both) {
+                                Ok(_) => {}
+                                Err(e) => error!("failed to shutown {:?}", e),
+                            }
+                        }
                         Actions::Send(m) => match connection.send_message(m).await {
                             Ok(_) => {}
                             Err(e) => error!("failed to send message {:?}", e),
@@ -179,5 +197,17 @@ where
     let mut guard_node = app.node().map_err(|_| Error::CannotGetLock)?;
     let node = guard_node.deref_mut();
     let _ = node.add_connection(conn);
+    Ok(())
+}
+
+pub fn remove_connection<A>(app: Arc<RwLock<A>>, addr: SocketAddr) -> Result<(), Error>
+where
+    A: Application + 'static + Send + Sync,
+{
+    let guard_app = app.read().map_err(|_| Error::CannotGetLock)?;
+    let app = guard_app.deref();
+    let mut guard_node = app.node().map_err(|_| Error::CannotGetLock)?;
+    let node = guard_node.deref_mut();
+    let _ = node.remove_connection(addr);
     Ok(())
 }

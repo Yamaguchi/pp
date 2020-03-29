@@ -11,6 +11,7 @@ mod application;
 mod configuration;
 mod crypto;
 mod errors;
+mod event;
 mod grpc;
 mod key;
 mod message;
