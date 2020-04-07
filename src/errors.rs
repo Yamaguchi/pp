@@ -3,6 +3,7 @@ use crate::message::Message;
 #[derive(Debug)]
 pub enum Error {
     PeerAlreadyConnected,
+    PeerNotFound,
     CannotConnectPeer,
     CannotHandleMessage(Message),
     CannotRead(std::io::Error),

@@ -13,7 +13,7 @@ impl Client {
         addr: SocketAddr,
         key: PrivateKey<Ed25519>,
     ) -> Result<ConnectionImpl, Error> {
-        info!("connect...");
+        info!("connecting...");
         let stream = TcpStream::connect(addr)
             .await
             .map_err(|_| Error::CannotConnectPeer)?;

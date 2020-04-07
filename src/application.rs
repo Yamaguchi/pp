@@ -1,21 +1,20 @@
 use crate::configuration;
 use crate::crypto::curves::Ed25519;
 use crate::errors::Error;
+use crate::event::EventManager;
 use crate::key::PrivateKey;
 use crate::node::Node;
-use crate::event::EventManager;
 use std::sync::Arc;
 use std::sync::Mutex;
 pub trait Application {
     fn node(&self) -> Result<std::sync::MutexGuard<'_, Node>, Error>;
     fn private_key(&self) -> PrivateKey<Ed25519>;
-    fn event_manager(&self) -> Result<std::sync::MutexGuard<'_, EventManager>, Error>;
+    // fn event_manager(&self) -> Result<std::sync::MutexGuard<'_, EventManager>, Error>;
 }
 
 pub struct NetworkApplication {
     node: Arc<Mutex<Node>>,
     private_key: PrivateKey<Ed25519>,
-    event_manager: Arc<Mutex<EventManager>>,
 }
 
 impl Application for NetworkApplication {
@@ -24,9 +23,6 @@ impl Application for NetworkApplication {
     }
     fn private_key(&self) -> PrivateKey<Ed25519> {
         self.private_key.clone()
-    }
-    fn event_manager(&self) -> Result<std::sync::MutexGuard<'_, EventManager>, Error> {
-        self.event_manager.lock().map_err(|_| Error::CannotGetLock)
     }
 }
 
@@ -37,7 +33,6 @@ impl NetworkApplication {
             private_key: PrivateKey::<Ed25519>::new(
                 &hex::decode(config.private_key).expect("cannot decode private key"),
             ),
-            event_manager: Arc::new(Mutex::new(EventManager::new())),
         }
     }
 }

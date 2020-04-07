@@ -5,6 +5,7 @@ use crate::message::Message;
 use async_trait::async_trait;
 use snow::TransportState;
 use std::io;
+use std::net::SocketAddr;
 use std::ops::DerefMut;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
@@ -28,6 +29,7 @@ pub trait Connection {
 }
 
 pub struct ConnectionImpl {
+    pub addr: SocketAddr,
     pub stream: TcpStream,
     pub transport: Option<TransportState>,
     pub relayer: Option<Arc<Mutex<UnboundedReceiver<Message>>>>,
@@ -36,6 +38,7 @@ pub struct ConnectionImpl {
 impl ConnectionImpl {
     pub fn new(stream: TcpStream) -> Self {
         ConnectionImpl {
+            addr: stream.peer_addr().unwrap(),
             stream: stream,
             transport: None,
             relayer: None,

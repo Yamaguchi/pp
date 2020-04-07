@@ -32,6 +32,7 @@ impl EventManager {
     }
 
     pub fn broadcast(&mut self, event: Event) -> Result<(), Error> {
+        info!("EventManager#broadcast");
         let event_type = event.to_type();
         for s in &self.senders[&event_type] {
             s.send(event.clone());

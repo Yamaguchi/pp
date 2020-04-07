@@ -32,17 +32,25 @@ impl Manager {
     where
         A: Application + 'static + Send + Sync,
     {
-        let guard_app = app.read().unwrap();
-        let app_ref = guard_app.deref();
-        let mut guard_event = app_ref.event_manager().unwrap();
-        let event_manager = guard_event.deref_mut();
-        let rx = event_manager.subscribe(EventType::Disconnected).unwrap();
-        match rx.recv() {
-            Ok(Event::Disconnected(addr)) => {
-                Self::reconnect(Arc::clone(&app), addr);
+        info!("init_event");
+        tokio::spawn(async move {
+            let rx = {
+                let guard_app = app.read().unwrap();
+                let app_ref = guard_app.deref();
+                let mut guard_node = app_ref.node().unwrap();
+                let node = guard_node.deref_mut();
+
+                let mut manager = node.event_manager.lock().unwrap();
+                manager.subscribe(EventType::Disconnected).unwrap()
+            };
+            match rx.recv() {
+                Ok(Event::Disconnected(addr)) => {
+                    info!("Event::Disconnected received");
+                    Self::reconnect(Arc::clone(&app), addr);
+                }
+                _ => {}
             }
-            _ => {}
-        }
+        });
     }
 
     /// errors:
@@ -54,6 +62,7 @@ impl Manager {
     where
         A: Application + 'static + Send + Sync,
     {
+        info!("Manager#connect");
         let peer = add_peer(Arc::clone(&app), addr)?;
         let key = {
             let guard_app = app.read().map_err(|_| Error::CannotGetLock)?;

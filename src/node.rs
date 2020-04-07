@@ -2,6 +2,9 @@ use crate::application::Application;
 use crate::configuration;
 use crate::crypto::curves::Ed25519;
 use crate::errors::Error;
+use crate::event::Event;
+use crate::event::EventManager;
+use crate::event::EventType;
 use crate::key::PublicKey;
 use crate::message::Message;
 use crate::network::connection::Actions;
@@ -23,30 +26,32 @@ use tokio::time;
 
 pub struct Node {
     peers: HashMap<SocketAddr, Peer>,
-    connections: HashMap<SocketAddr, ConnectionImpl>,
     message_handlers: HashMap<PublicKey<Ed25519>, Sender<Message>>,
     config: configuration::Application,
+    pub event_manager: Arc<Mutex<EventManager>>,
 }
 
 impl Node {
     pub fn new(config: configuration::Application) -> Self {
         Node {
             peers: HashMap::<SocketAddr, Peer>::new(),
-            connections: HashMap::<SocketAddr, ConnectionImpl>::new(),
             message_handlers: HashMap::<PublicKey<Ed25519>, Sender<Message>>::new(),
             config: config,
+            event_manager: Arc::new(Mutex::new(EventManager::new())),
         }
     }
 
     pub fn remove_connection(&mut self, addr: SocketAddr) -> Result<(), Error> {
+        info!("Node#remove_connection");
         let peer = self.peers[&addr].clone();
-        let key = peer.public_key.unwrap();
+        let key = peer.public_key.expect("public key not found");
         self.message_handlers.remove(&key);
         self.peers.remove(&addr);
         Ok(())
     }
 
     pub fn add_connection(&mut self, mut connection: ConnectionImpl) -> Result<(), Error> {
+        info!("Node#add_connection");
         //channel for send Message to other node.
         let (send_tx, send_rx) = unbounded_channel::<Message>();
 
@@ -55,20 +60,26 @@ impl Node {
         let mut tx = recv_tx.clone();
         connection.relayer = Some(Arc::new(Mutex::new(send_rx)));
         let key = connection.remote_static_key()?;
-        info!("connection is established: {:?}", key);
-        self.message_handlers.insert(key, recv_tx.clone());
+        info!("connection is established: {:?}", key.clone());
+        self.message_handlers.insert(key.clone(), recv_tx.clone());
         let addr = connection
             .stream
             .peer_addr()
             .map_err(|_| Error::CannotConnectPeer)?;
-        // self.connections.insert(addr, connection);
 
+        let cloned_send_tx = send_tx.clone();
+        let event_manager = Arc::clone(&self.event_manager);
         tokio::spawn(async move {
             let mut buffer = vec![];
             while let Some(result) = connection.next().await {
                 match result {
                     Ok(action) => match action {
                         Actions::Send(Message::Disconnect) => {
+                            let mut guard = event_manager.lock().unwrap();
+                            let sender = guard.deref_mut();
+                            sender
+                                .broadcast(Event::Disconnected(connection.addr))
+                                .unwrap();
                             match connection.stream.shutdown(Shutdown::Both) {
                                 Ok(_) => {}
                                 Err(e) => error!("failed to shutown {:?}", e),
@@ -76,7 +87,10 @@ impl Node {
                         }
                         Actions::Send(m) => match connection.send_message(m).await {
                             Ok(_) => {}
-                            Err(e) => error!("failed to send message {:?}", e),
+                            Err(e) => {
+                                error!("failed to send message {:?}", e);
+                                let _ = cloned_send_tx.clone().send(Message::Disconnect);
+                            }
                         },
                         Actions::Receive => {
                             let recv = connection.receive_message(&mut buffer).await;
@@ -93,6 +107,7 @@ impl Node {
                                 }
                                 Err(e) => {
                                     error!("failed to recv message {:?}", e);
+                                    let _ = cloned_send_tx.clone().send(Message::Disconnect);
                                 }
                             }
                         }
@@ -105,6 +120,8 @@ impl Node {
         self.start_ping_thread(recv_tx.clone());
 
         let mut peer = self.peers[&addr].clone();
+        peer.public_key = Some(key.clone());
+        self.update_peer(addr, &peer)?;
         tokio::spawn(async move {
             while let Some(m) = recv_rx.recv().await {
                 match peer.handle_message(m, send_tx.clone()).await {
@@ -119,6 +136,14 @@ impl Node {
         Ok(())
     }
 
+    pub fn update_peer(&mut self, addr: SocketAddr, peer: &Peer) -> Result<(), Error> {
+        if self.peers.contains_key(&addr) {
+            self.peers.insert(addr, peer.clone());
+        } else {
+            return Err(Error::PeerNotFound);
+        }
+        Ok(())
+    }
     pub fn add_peer(&mut self, addr: SocketAddr) -> Result<Peer, Error> {
         let peer = Peer::new(addr);
         if self.peers.contains_key(&addr) {
@@ -145,10 +170,24 @@ impl Node {
     fn start_ping_thread(&mut self, mut tx: Sender<Message>) {
         let interval = self.config.ping_interval;
         if interval > 0 {
+            let event_manager = Arc::clone(&self.event_manager);
             tokio::spawn(async move {
                 let mut interval = time::interval(Duration::from_secs(interval));
+                let receiver = {
+                    let mut guard = event_manager.lock().unwrap();
+                    let sender = guard.deref_mut();
+                    sender.subscribe(EventType::Disconnected).unwrap()
+                };
+
                 loop {
                     interval.tick().await;
+                    match receiver.try_recv() {
+                        Ok(Event::Disconnected(_addr)) => {
+                            info!("Node#start_ping_thread disconnected");
+                            break;
+                        }
+                        _ => {}
+                    }
                     info!("send Message::RequestPing");
                     match tx.send(Message::RequestPing).await {
                         Ok(_) => {}
@@ -193,8 +232,8 @@ where
     A: Application + 'static + Send + Sync,
 {
     let guard_app = app.read().map_err(|_| Error::CannotGetLock)?;
-    let app = guard_app.deref();
-    let mut guard_node = app.node().map_err(|_| Error::CannotGetLock)?;
+    let app_ref = guard_app.deref();
+    let mut guard_node = app_ref.node().map_err(|_| Error::CannotGetLock)?;
     let node = guard_node.deref_mut();
     let _ = node.add_connection(conn);
     Ok(())
