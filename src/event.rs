@@ -35,7 +35,7 @@ impl EventManager {
         info!("EventManager#broadcast");
         let event_type = event.to_type();
         for s in &self.senders[&event_type] {
-            s.send(event.clone());
+            let _ = s.send(event.clone());
         }
         Ok(())
     }
@@ -65,14 +65,16 @@ impl Event {
     }
 }
 
+#[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn test_subscribe_and_broadcast() {
         let mut m = EventManager::new();
         if let Ok(rx) = m.subscribe(EventType::Connected) {
             let e = Event::Connected("[::1]:1000".parse().unwrap());
-            m.broadcast(e.clone());
+            let _ = m.broadcast(e.clone());
             assert_eq!(e, rx.recv().unwrap());
         } else {
             panic!("subscribe failed.");

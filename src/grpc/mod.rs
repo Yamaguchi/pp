@@ -27,14 +27,14 @@ where
     A: Application + 'static + Send + Sync,
 {
     app: Arc<RwLock<A>>,
-    config: configuration::gRPC,
+    config: configuration::Grpc,
 }
 
 impl<A> GrpcServer<A>
 where
     A: Application + 'static + Send + Sync,
 {
-    pub fn new(app: Arc<RwLock<A>>, config: configuration::gRPC) -> Self {
+    pub fn new(app: Arc<RwLock<A>>, config: configuration::Grpc) -> Self {
         GrpcServer::<A> {
             app: app,
             config: config,

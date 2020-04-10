@@ -1,7 +1,6 @@
 use crate::configuration;
 use crate::crypto::curves::Ed25519;
 use crate::errors::Error;
-use crate::event::EventManager;
 use crate::key::PrivateKey;
 use crate::node::Node;
 use std::sync::Arc;

@@ -8,7 +8,7 @@ use std::net::SocketAddr;
 #[derive(Debug, Deserialize, Clone)]
 pub struct Configuration {
     pub application: Application,
-    pub grpc: gRPC,
+    pub grpc: Grpc,
     pub server: Server,
     pub network: Network,
 }
@@ -20,7 +20,7 @@ pub struct Application {
 }
 
 #[derive(Debug, Deserialize, Clone)]
-pub struct gRPC {
+pub struct Grpc {
     pub bind: String,
 }
 

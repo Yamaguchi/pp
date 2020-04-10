@@ -44,9 +44,10 @@ impl Node {
     pub fn remove_connection(&mut self, addr: SocketAddr) -> Result<(), Error> {
         info!("Node#remove_connection");
         let peer = self.peers[&addr].clone();
-        let key = peer.public_key.expect("public key not found");
-        self.message_handlers.remove(&key);
         self.peers.remove(&addr);
+        if let Some(key) = peer.public_key {
+            self.message_handlers.remove(&key);
+        }
         Ok(())
     }
 
@@ -61,7 +62,6 @@ impl Node {
         connection.relayer = Some(Arc::new(Mutex::new(send_rx)));
         let key = connection.remote_static_key()?;
         info!("connection is established: {:?}", key.clone());
-        self.message_handlers.insert(key.clone(), recv_tx.clone());
         let addr = connection
             .stream
             .peer_addr()
@@ -121,6 +121,7 @@ impl Node {
 
         let mut peer = self.peers[&addr].clone();
         peer.public_key = Some(key.clone());
+        self.message_handlers.insert(key.clone(), recv_tx.clone());
         self.update_peer(addr, &peer)?;
         tokio::spawn(async move {
             while let Some(m) = recv_rx.recv().await {
