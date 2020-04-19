@@ -4,22 +4,35 @@ use crate::key::PublicKey;
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::net::SocketAddr;
-use std::sync::mpsc::channel;
-use std::sync::mpsc::{Receiver, Sender};
+use std::ops::DerefMut;
+use std::sync::mpsc::sync_channel;
+use std::sync::mpsc::{Receiver, SyncSender};
+use std::sync::{Arc, Mutex};
+
+lazy_static! {
+    static ref EVENT_MANAGER: Arc<Mutex<EventManager>> =
+        { Arc::new(Mutex::new(EventManager::new())) };
+}
 
 pub struct EventManager {
-    senders: HashMap<EventType, Vec<Sender<Event>>>,
+    senders: HashMap<EventType, Vec<SyncSender<Event>>>,
 }
 
 impl EventManager {
-    pub fn new() -> Self {
+    fn new() -> Self {
         EventManager {
             senders: HashMap::new(),
         }
     }
 
-    pub fn subscribe(&mut self, event_type: EventType) -> Result<Receiver<Event>, Error> {
-        let (tx, rx) = channel();
+    pub fn subscribe(event_type: EventType) -> Result<Receiver<Event>, Error> {
+        let mut guard = EVENT_MANAGER.lock().map_err(|_| Error::CannotGetLock)?;
+        let m = guard.deref_mut();
+        m.subscribe_inner(event_type)
+    }
+
+    fn subscribe_inner(&mut self, event_type: EventType) -> Result<Receiver<Event>, Error> {
+        let (tx, rx) = sync_channel(1);
         if self.senders.contains_key(&event_type) {
             let mut senders = self.senders[&event_type].to_vec();
             senders.push(tx);
@@ -31,7 +44,13 @@ impl EventManager {
         Ok(rx)
     }
 
-    pub fn broadcast(&mut self, event: Event) -> Result<(), Error> {
+    pub fn broadcast(event: Event) -> Result<(), Error> {
+        let mut guard = EVENT_MANAGER.lock().map_err(|_| Error::CannotGetLock)?;
+        let m = guard.deref_mut();
+        m.broadcast_inner(event)
+    }
+
+    fn broadcast_inner(&mut self, event: Event) -> Result<(), Error> {
         info!("EventManager#broadcast");
         let event_type = event.to_type();
         for s in &self.senders[&event_type] {
@@ -71,10 +90,9 @@ mod tests {
 
     #[test]
     fn test_subscribe_and_broadcast() {
-        let mut m = EventManager::new();
-        if let Ok(rx) = m.subscribe(EventType::Connected) {
+        if let Ok(rx) = EventManager::subscribe(EventType::Connected) {
             let e = Event::Connected("[::1]:1000".parse().unwrap());
-            let _ = m.broadcast(e.clone());
+            let _ = EventManager::broadcast(e.clone());
             assert_eq!(e, rx.recv().unwrap());
         } else {
             panic!("subscribe failed.");

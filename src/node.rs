@@ -28,7 +28,6 @@ pub struct Node {
     peers: HashMap<SocketAddr, Peer>,
     message_handlers: HashMap<PublicKey<Ed25519>, Sender<Message>>,
     config: configuration::Application,
-    pub event_manager: Arc<Mutex<EventManager>>,
 }
 
 impl Node {
@@ -37,7 +36,6 @@ impl Node {
             peers: HashMap::<SocketAddr, Peer>::new(),
             message_handlers: HashMap::<PublicKey<Ed25519>, Sender<Message>>::new(),
             config: config,
-            event_manager: Arc::new(Mutex::new(EventManager::new())),
         }
     }
 
@@ -68,18 +66,13 @@ impl Node {
             .map_err(|_| Error::CannotConnectPeer)?;
 
         let cloned_send_tx = send_tx.clone();
-        let event_manager = Arc::clone(&self.event_manager);
         tokio::spawn(async move {
             let mut buffer = vec![];
             while let Some(result) = connection.next().await {
                 match result {
                     Ok(action) => match action {
                         Actions::Send(Message::Disconnect) => {
-                            let mut guard = event_manager.lock().unwrap();
-                            let sender = guard.deref_mut();
-                            sender
-                                .broadcast(Event::Disconnected(connection.addr))
-                                .unwrap();
+                            EventManager::broadcast(Event::Disconnected(connection.addr)).unwrap();
                             match connection.stream.shutdown(Shutdown::Both) {
                                 Ok(_) => {}
                                 Err(e) => error!("failed to shutown {:?}", e),
@@ -171,14 +164,10 @@ impl Node {
     fn start_ping_thread(&mut self, mut tx: Sender<Message>) {
         let interval = self.config.ping_interval;
         if interval > 0 {
-            let event_manager = Arc::clone(&self.event_manager);
+            // let event_manager = Arc::clone(&event_manager);
             tokio::spawn(async move {
                 let mut interval = time::interval(Duration::from_secs(interval));
-                let receiver = {
-                    let mut guard = event_manager.lock().unwrap();
-                    let sender = guard.deref_mut();
-                    sender.subscribe(EventType::Disconnected).unwrap()
-                };
+                let receiver = EventManager::subscribe(EventType::Disconnected).unwrap();
 
                 loop {
                     interval.tick().await;

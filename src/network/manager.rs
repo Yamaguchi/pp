@@ -1,12 +1,11 @@
 use crate::application::Application;
 use crate::configuration;
 use crate::errors::Error;
-use crate::event::{Event, EventType};
+use crate::event::{Event, EventManager, EventType};
 use crate::network::client::Client;
 use crate::node::{add_connection, add_peer, remove_connection};
 use std::net::SocketAddr;
 use std::ops::Deref;
-use std::ops::DerefMut;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use tokio::time;
@@ -34,15 +33,7 @@ impl Manager {
     {
         info!("init_event");
         tokio::spawn(async move {
-            let rx = {
-                let guard_app = app.read().unwrap();
-                let app_ref = guard_app.deref();
-                let mut guard_node = app_ref.node().unwrap();
-                let node = guard_node.deref_mut();
-
-                let mut manager = node.event_manager.lock().unwrap();
-                manager.subscribe(EventType::Disconnected).unwrap()
-            };
+            let rx = EventManager::subscribe(EventType::Disconnected).unwrap();
             match rx.recv() {
                 Ok(Event::Disconnected(addr)) => {
                     info!("Event::Disconnected received");
